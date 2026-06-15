@@ -1,7 +1,9 @@
 // start.js
 import { execSync } from 'node:child_process';
 import dotenv from 'dotenv';
-
+console.log('🔍 [DIAGNÓSTICO DE API KEYS]');
+console.log('Gemini Key:', process.env.GEMINI_API_KEY ? '✅ Presente' : '❌ VAZIA');
+console.log('Groq Key:', process.env.LLAMA_API_KEY ? '✅ Presente' : '❌ VAZIA');
 // Força o Node a ler as variáveis do painel da Discloud ou do .env antes de tudo
 dotenv.config();
 
