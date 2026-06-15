@@ -1,5 +1,8 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/database/client" // 👈 O SEGREDO TÁ AQUI! Blindando contra a Discloud
 }
 
 datasource db {

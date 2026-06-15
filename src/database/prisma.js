@@ -1,10 +1,9 @@
 // src/database/prisma.js
 
-// Importação compatível com ES Modules e CommonJS
-import pkg from '@prisma/client';
-const { PrismaClient } = pkg;
+// 👈 Importando o PrismaClient diretamente da pasta blindada que geramos, 
+// bypassando o node_modules completamente.
+import { PrismaClient } from './client/index.js'; 
 
-// Padrão Singleton: Evita abrir centenas de conexões se o bot reiniciar rápido
 const prisma = global.prisma || new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
