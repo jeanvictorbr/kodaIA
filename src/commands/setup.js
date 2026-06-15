@@ -6,7 +6,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  MessageFlags // <--- Adicionado aqui
 } from 'discord.js';
 import prisma from '../database/prisma.js';
 
@@ -19,7 +20,7 @@ export default {
 
   async execute(interaction, client) {
     // deferReply segura a onda do Discord (evita timeout de 3 segundos) enquanto o bot processa
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { guild } = interaction;
 

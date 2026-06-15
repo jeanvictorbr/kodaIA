@@ -1,16 +1,15 @@
 // start.js
 import { execSync } from 'node:child_process';
 
-console.log('🔄 [Discloud] Hackeando a Matrix: Forçando a geração do Prisma...');
+console.log('🔄 [Discloud] Hackeando a Matrix: Preparando Banco de Dados...');
 
 try {
-  // Isso trava o servidor e obriga ele a gerar o banco antes de qualquer coisa
-  execSync('npx prisma generate', { stdio: 'inherit' });
-  console.log('✅ [Discloud] Prisma gerado com sucesso no coração do servidor!');
+  // O "generate" cria o cliente JS. O "db push" cria as tabelas no PostgreSQL real.
+  execSync('npx prisma generate && npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+  console.log('✅ [Discloud] Tabelas e Prisma gerados com sucesso!');
 } catch (error) {
-  console.error('🚨 [Discloud] Erro crítico ao gerar:', error);
+  console.error('🚨 [Discloud] Erro crítico no banco de dados:', error);
 }
 
 console.log('🚀 [KodaAI] Iniciando a nave principal...');
-// Só agora, com o banco pronto, a gente liga o seu código
 import('./src/index.js');
