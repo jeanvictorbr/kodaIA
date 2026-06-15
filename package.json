@@ -6,7 +6,6 @@
   "main": "src/index.js",
 "scripts": {
     "dev": "npx prisma generate && npx prisma db push && nodemon src/index.js",
-    "postinstall": "prisma generate",
     "start": "npx prisma generate && node src/index.js"
   },
   "keywords": ["discord", "bot", "security", "koda", "kibo"],
