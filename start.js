@@ -1,10 +1,17 @@
 // start.js
 import { execSync } from 'node:child_process';
 import dotenv from 'dotenv';
+
+// O override: true força o sistema a usar as variáveis do sistema/painel 
+// mesmo que o dotenv ache algo conflitante
+dotenv.config({ override: true }); 
+
 console.log('🔍 [DIAGNÓSTICO DE API KEYS]');
+// Agora ele vai mostrar se enxergou o que você colocou no painel da Discloud
 console.log('Gemini Key:', process.env.GEMINI_API_KEY ? '✅ Presente' : '❌ VAZIA');
 console.log('Groq Key:', process.env.LLAMA_API_KEY ? '✅ Presente' : '❌ VAZIA');
-// Força o Node a ler as variáveis do painel da Discloud ou do .env antes de tudo
+
+// ... resto do seu código de start.js ...
 dotenv.config();
 
 console.log('🔄 [Discloud] Hackeando a Matrix: Preparando Banco de Dados...');
