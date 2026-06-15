@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id              String   @id 
+  vip             Boolean  @default(false) 
+  logChannelId    String?  
+  securityLevel   Int      @default(1) 
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  logs            SecurityLog[]
+}
+
+model SecurityLog {
+  id        String   @id @default(uuid())
+  guildId   String
+  userId    String
+  action    String   
+  reason    String   
+  aiDetails String?  
+  createdAt DateTime @default(now())
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  @@index([guildId]) 
+  @@index([userId])
+}
+
+model GlobalReputation {
+  userId      String   @id 
+  trustScore  Int      @default(100) 
+  flags       Int      @default(0)   
+  lastOffense DateTime?
+  updatedAt   DateTime @updatedAt
+}
