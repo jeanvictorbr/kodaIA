@@ -2,20 +2,24 @@
   "name": "kibo",
   "version": "1.0.0",
   "type": "module",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "Bot de segurança Anti-Raid e Anti-Scam",
+  "main": "src/index.js",
+"scripts": {
+    "dev": "npx prisma generate && npx prisma db push && nodemon src/index.js",
+    "start": "node src/index.js"
   },
-  "keywords": [],
+  "keywords": ["discord", "bot", "security", "koda", "kibo"],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^7.8.0",
     "axios": "^1.18.0",
     "discord.js": "^14.26.4",
     "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0",
+    "prisma": "^7.8.0"
   }
 }
