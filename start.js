@@ -1,15 +1,27 @@
 // start.js
 import { execSync } from 'node:child_process';
+import dotenv from 'dotenv';
+
+// Força o Node a ler as variáveis do painel da Discloud ou do .env antes de tudo
+dotenv.config();
 
 console.log('🔄 [Discloud] Hackeando a Matrix: Preparando Banco de Dados...');
 
 try {
-  // O "generate" cria o cliente JS. O "db push" cria as tabelas no PostgreSQL real.
-  execSync('npx prisma generate && npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-  console.log('✅ [Discloud] Tabelas e Prisma gerados com sucesso!');
+  execSync('npx prisma generate', { stdio: 'inherit', env: process.env });
+  console.log('✅ [1/2] Prisma Client gerado com sucesso.');
+
+  // Aqui é a hora da verdade. Se o banco rejeitar, ele morre aqui.
+  execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit', env: process.env });
+  console.log('✅ [2/2] Tabelas sincronizadas com sucesso no PostgreSQL!');
+  
 } catch (error) {
-  console.error('🚨 [Discloud] Erro crítico no banco de dados:', error);
+  console.error('\n🚨🚨🚨 [ERRO FATAL NO BANCO DE DADOS] 🚨🚨🚨');
+  console.error('O Prisma não conseguiu conectar no seu PostgreSQL.');
+  console.error('Verifique se a sua DATABASE_URL está correta no painel da Discloud!');
+  console.error('A nave foi abortada para evitar corromper o sistema.');
+  process.exit(1); // Mata o bot na hora
 }
 
-console.log('🚀 [KodaAI] Iniciando a nave principal...');
+console.log('🚀 [KodaAI] Banco conectado! Iniciando a nave principal...');
 import('./src/index.js');
