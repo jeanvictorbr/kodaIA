@@ -1,8 +1,6 @@
 // src/database/prisma.js
-
-// 👈 Importando o PrismaClient diretamente da pasta blindada que geramos, 
-// bypassando o node_modules completamente.
-import { PrismaClient } from './client/index.js'; 
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
 
 const prisma = global.prisma || new PrismaClient();
 
