@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Bot de segurança Anti-Raid e Anti-Scam",
-  "main": "src/index.js",
+  "main": "start.js",
   "scripts": {
     "dev": "npx prisma generate && npx prisma db push && nodemon src/index.js",
     "build": "npx prisma generate",
-    "start": "node src/index.js"
+    "start": "node start.js" 
   },
   "keywords": ["discord", "bot", "security", "koda", "kibo"],
   "author": "",
