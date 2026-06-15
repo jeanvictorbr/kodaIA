@@ -3,27 +3,37 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 import crypto from 'node:crypto';
 
-// Instância Primária (Gemini)
 const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 class KodaAIEngine {
   constructor() {
-    // Cache em RAM super rápido. O(1) de complexidade.
     this.cache = new Map();
   }
 
-  /**
-   * Gera um hash MD5 da mensagem ou imagem para usar como chave do Cache
-   */
   _hashMessage(content) {
     return crypto.createHash('md5').update(content.trim().toLowerCase()).digest('hex');
   }
 
   /**
-   * 🆓 MÓDULO FREE: Analisa o texto puro procurando golpes.
+   * Extrator Blindado de JSON: Ignora conversinha da IA e pega só o objeto.
    */
+  _extractJSON(text) {
+    try {
+      // Procura exatamente o bloco que começa com { e termina com }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      // Se não achar as chaves, tenta fazer o parse direto
+      return JSON.parse(text);
+    } catch (error) {
+      console.error('🚨 [KodaAI] A IA alucinou e não mandou um JSON válido. Texto recebido:\n', text);
+      // Fallback seguro pra nave não crashar
+      return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida da IA.', confidence: 0 };
+    }
+  }
+
   async analyzeText(content, tier = 'FREE') {
-    // Limpa o cache se passar de 5000 itens para não estourar a RAM do servidor
     if (this.cache.size > 5000) this.cache.clear();
 
     const hash = this._hashMessage(content);
@@ -31,7 +41,6 @@ class KodaAIEngine {
       return this.cache.get(hash);
     }
 
-    // Prompt engenhoso focado em cibersegurança e retorno estrito em JSON
     const prompt = `
       Você é a KodaAI, um sistema rigoroso de segurança de comunidades.
       Analise a mensagem abaixo e determine se é um golpe, phishing, scam, ou link malicioso.
@@ -48,34 +57,26 @@ class KodaAIEngine {
     `;
 
     try {
-      // 🟢 TENTATIVA 1: IA Primária (Gemini 1.5 Flash - Rápido e barato)
       const result = await this._callGemini(prompt);
       this.cache.set(hash, result);
       return result;
     } catch (error) {
-      console.warn('⚠️ [KodaAI] Gemini falhou ou deu Rate Limit no texto. Acionando Failover pro Llama...');
+      console.warn('⚠️ [KodaAI] Gemini falhou no texto. Acionando Failover pro Llama...');
 
       try {
-        // 🟡 TENTATIVA 2: IA Secundária (Llama via API Genérica)
         const fallbackResult = await this._callLlama(prompt);
         this.cache.set(hash, fallbackResult);
         return fallbackResult;
       } catch (critical) {
         console.error('🚨 [KodaAI] Pane Global nas APIs de IA!', critical);
-        // Fail-open (Deixa passar se a culpa for da nossa infra) pra não punir inocentes
         return { isThreat: false, type: 'NONE', reason: 'Bypass por falha de API.', confidence: 0 };
       }
     }
   }
 
-  /**
-   * 💎 MÓDULO VIP: Analisa imagens usando OCR e heurística visual.
-   * Procura comprovantes falsos, prints forjados e textos maliciosos em imagens.
-   */
   async analyzeImage(imageBuffer, mimeType) {
     if (this.cache.size > 5000) this.cache.clear();
     
-    // Converte o Buffer de RAM direto para Base64 (Formato que a API do Google exige)
     const base64Data = imageBuffer.toString('base64');
     const hash = this._hashMessage(base64Data); 
 
@@ -101,39 +102,30 @@ class KodaAIEngine {
     `;
 
     try {
-      // Usando o modelo multimodal nativo do Gemini (Processa imagem + texto)
       const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent([
         prompt,
         { inlineData: { data: base64Data, mimeType } }
       ]);
       
-      // Correção aplicada: Regex na mesma linha
-      let text = result.response.text().replace(/```json\n?|```/g, '').trim();
-      const parsedData = JSON.parse(text);
+      // Passa a resposta da IA no nosso extrator blindado
+      const parsedData = this._extractJSON(result.response.text());
       
       this.cache.set(hash, parsedData);
       return parsedData;
 
     } catch (error) {
       console.warn('⚠️ [KodaAI - Visão] Falha na API do Gemini ao processar imagem.', error.message);
-      // Como a gente precisa de modelos multimodais aqui, se o Gemini cair, bypassamos com segurança.
       return { isThreat: false, type: 'NONE', reason: 'Bypass por falha na engine de visão.', confidence: 0 };
     }
   }
 
-  // ==========================================
-  // MÉTODOS INTERNOS (Helpers)
-  // ==========================================
-
   async _callGemini(prompt) {
     const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
     const response = await model.generateContent(prompt);
-    let text = response.response.text();
-    // Correção aplicada: Regex na mesma linha
-    text = text.replace(/```json\n?|
-```/g, '').trim();
-    return JSON.parse(text);
+    
+    // Passa a resposta da IA no nosso extrator blindado
+    return this._extractJSON(response.response.text());
   }
 
   async _callLlama(prompt) {
@@ -145,10 +137,11 @@ class KodaAIEngine {
       headers: { 'Authorization': `Bearer ${process.env.LLAMA_API_KEY}` },
       timeout: 5000 
     });
-    return JSON.parse(response.data.choices[0].message.content);
+    
+    // Passa a resposta da IA no nosso extrator blindado
+    return this._extractJSON(response.data.choices[0].message.content);
   }
 
-  // Arrays dinâmicos de resposta "de quebrada" para manter a personalidade
   getRandomPhrase(type) {
     const phrases = {
       threatDeleted: [
@@ -165,7 +158,6 @@ class KodaAIEngine {
       ]
     };
     
-    // Fallback pra threatDeleted se for chamado sem especificar imagem
     const list = phrases[type] || phrases['threatDeleted'];
     return list[Math.floor(Math.random() * list.length)];
   }
