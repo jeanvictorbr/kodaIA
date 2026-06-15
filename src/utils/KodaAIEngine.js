@@ -128,14 +128,17 @@ class KodaAIEngine {
     return this._extractJSON(response.response.text());
   }
 
-  async _callLlama(prompt) {
+async _callLlama(prompt) {
     const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
       model: "llama3-8b-8192",
       messages: [{ role: "user", content: prompt }],
-
+      temperature: 0.1 // Temperatura baixa para ser mais preciso no JSON
     }, {
-      headers: { 'Authorization': `Bearer ${process.env.LLAMA_API_KEY}` },
-      timeout: 5000 
+      headers: { 
+        'Authorization': `Bearer ${process.env.LLAMA_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000 
     });
     
     // Passa a resposta da IA no nosso extrator blindado
