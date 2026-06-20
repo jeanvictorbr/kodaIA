@@ -2,7 +2,7 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 // ⚠️ COLOQUE O SEU ID DO DISCORD AQUI PARA BLINDAR O COMANDO
-const DEVELOPER_ID = 'SEU_ID_AQUI'; 
+const DEVELOPER_ID = '1070658145740926987'; 
 
 export default {
   data: new SlashCommandBuilder()
