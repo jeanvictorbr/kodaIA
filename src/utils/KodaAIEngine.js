@@ -1,5 +1,5 @@
 // src/utils/KodaAIEngine.js
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import axios from 'axios';
 import crypto from 'node:crypto';
 
@@ -28,6 +28,22 @@ class KodaAIEngine {
       console.error('🚨 [KodaAI] A IA alucinou e não mandou um JSON válido. Texto recebido:\n', text);
       return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida da IA.', confidence: 0, suggestTimeout: false };
     }
+  }
+
+  /**
+   * 🟢 NOVO: Desliga os filtros da Google. 
+   * Permite que o Gemini analise palavrões, brigas e imagens NSFW sem dar erro.
+   */
+  _getUncensoredModel() {
+    return gemini.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ]
+    });
   }
 
   async analyzeText(content, tier = 'FREE') {
@@ -59,13 +75,13 @@ class KodaAIEngine {
       this.cache.set(hash, result);
       return result;
     } catch (error) {
-      console.warn('⚠️ [KodaAI] Gemini falhou no texto. Acionando Failover pro Llama...');
+      console.warn(`⚠️ [KodaAI] Gemini falhou no texto. Motivo: ${error.message}. Acionando Failover pro Llama...`);
       try {
         const fallbackResult = await this._callLlama(prompt);
         this.cache.set(hash, fallbackResult);
         return fallbackResult;
       } catch (critical) {
-        console.error('🚨 [KodaAI] Pane Global nas APIs de IA!', critical);
+        console.error('🚨 [KodaAI] Pane Global nas APIs de IA!', critical.message);
         return { isThreat: false, type: 'NONE', reason: 'Bypass por falha de API.', confidence: 0, suggestTimeout: false };
       }
     }
@@ -101,7 +117,7 @@ class KodaAIEngine {
     `;
 
     try {
-      const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = this._getUncensoredModel();
       const result = await model.generateContent([
         prompt,
         { inlineData: { data: base64Data, mimeType } }
@@ -118,7 +134,7 @@ class KodaAIEngine {
   }
 
   async _callGemini(prompt) {
-    const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = this._getUncensoredModel();
     const response = await model.generateContent(prompt);
     return this._extractJSON(response.response.text());
   }
