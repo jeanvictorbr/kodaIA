@@ -37,7 +37,7 @@ class KodaAIEngine {
     });
   }
 
-  // 🧠 NOVO: Gera a dica de engajamento baseada nos dados do Painel
+  // 🧠 NOVO: Geras a dica de engajamento baseada nos dados do Painel
   async getConsultingInsight(prompt) {
     try {
       const model = this._getUncensoredModel();
