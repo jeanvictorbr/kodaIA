@@ -31,12 +31,22 @@ export default {
 
       if (imageAttachment && tier === 'VIP') {
         if (imageAttachment.size > 5 * 1024 * 1024) return;
-
         const response = await axios.get(imageAttachment.url, { responseType: 'arraybuffer' });
         const imageBuffer = Buffer.from(response.data);
-
         analysis = await KodaAIEngine.analyzeImage(imageBuffer, imageAttachment.contentType);
-      } else if (hasLink || hasSuspiciousWords || hasToxicWords) {
+      } 
+      // 🚀 NOVO: PUNIÇÃO LOCAL IMEDIATA (Bypassa a IA para não sofrer censura e ser mais rápido)
+      else if (hasToxicWords) {
+        analysis = {
+          isThreat: true,
+          type: 'SEVERE_INSULT',
+          reason: 'Filtro Heurístico Local: Palavra de baixo calão grave detectada no chat. Punição aplicada diretamente pelo motor interno sem intermédio da API.',
+          confidence: 100,
+          suggestTimeout: true
+        };
+      } 
+      // Se for esquema ou link suspeito, manda para a IA investigar
+      else if (hasLink || hasSuspiciousWords) {
         analysis = await KodaAIEngine.analyzeText(message.content, tier);
       }
 
@@ -64,7 +74,6 @@ export default {
 
         setTimeout(() => alertMsg.delete().catch(() => {}), 10000);
 
-        // 🟢 CORREÇÃO: Força o bot a procurar o canal na API (fetch) se não estiver na RAM (cache)
         const logChannel = message.guild.channels.cache.get(dbGuild.logChannelId) || await message.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
         
         if (logChannel) {
@@ -75,7 +84,6 @@ export default {
               { name: '👤 Usuário', value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
               { name: '📍 Canal', value: `<#${message.channel.id}>`, inline: true },
               { name: '🛑 Tipo', value: `\`${analysis.type || 'Ameaça'}\``, inline: true },
-              // Proteção contra falhas da IA omitir a string de razão
               { name: '🤖 Análise Forense KodaAI', value: analysis.reason || 'Análise direta executada sem justificativa extensa.', inline: false }
             )
             .setFooter({ text: `Confiança da IA: ${analysis.confidence || 100}% | Nível: ${tier}` })
@@ -91,7 +99,6 @@ export default {
              logEmbed.addFields({ name: '💬 Texto Apagado', value: `\`\`\`text\n${message.content.substring(0, 1000)}\n\`\`\``, inline: false });
           }
 
-          // Adicionado catch para garantir que erros de permissão de envio não crashem o radar silenciosamente
           await logChannel.send({ embeds: [logEmbed] }).catch(err => console.error("🚨 Falha ao enviar Log Embed:", err));
         }
 

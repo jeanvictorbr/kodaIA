@@ -14,29 +14,21 @@ class KodaAIEngine {
     return crypto.createHash('md5').update(content.trim().toLowerCase()).digest('hex');
   }
 
-  /**
-   * Extrator Blindado de JSON: Ignora conversinha da IA e pega só o objeto.
-   */
   _extractJSON(text) {
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
       return JSON.parse(text);
     } catch (error) {
       console.error('🚨 [KodaAI] A IA alucinou e não mandou um JSON válido. Texto recebido:\n', text);
-      return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida da IA.', confidence: 0, suggestTimeout: false };
+      return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida.', confidence: 0, suggestTimeout: false };
     }
   }
 
-  /**
-   * 🟢 NOVO: Desliga os filtros da Google e usa a versão latest do modelo.
-   * Permite que o Gemini analise palavrões, brigas e imagens NSFW sem dar erro 404.
-   */
   _getUncensoredModel() {
+    // 🟢 CORREÇÃO: Usando a versão de produção estável do Gemini
     return gemini.getGenerativeModel({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-2.0-flash",
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -50,23 +42,21 @@ class KodaAIEngine {
     if (this.cache.size > 5000) this.cache.clear();
 
     const hash = this._hashMessage(content);
-    if (this.cache.has(hash)) {
-      return this.cache.get(hash);
-    }
+    if (this.cache.has(hash)) return this.cache.get(hash);
 
     const prompt = `
       Você é a KodaAI, um sistema rigoroso de segurança de comunidades.
-      Analise a mensagem abaixo e determine se é um golpe, phishing, scam, OU se contém Toxicidade/Brigas (insultos graves, racismo, homofobia, ameaças de morte, assédio).
+      Analise a mensagem abaixo e determine se é um golpe, phishing, scam ou link malicioso.
       
-      Mensagem do usuário: "${content}"
+      Mensagem: "${content}"
       
       Retorne APENAS um JSON válido neste formato exato e nada mais:
       {
         "isThreat": boolean,
-        "type": "NONE" | "SCAM_TEXT" | "PHISHING" | "SUSPICIOUS_LINK" | "TOXICITY" | "SEVERE_INSULT",
+        "type": "NONE" | "SCAM_TEXT" | "PHISHING" | "SUSPICIOUS_LINK",
         "reason": "Explicação técnica direta e profissional em português para a Staff",
         "confidence": number (0 a 100),
-        "suggestTimeout": boolean (true se a ofensa for grave e merecer punição no Discord)
+        "suggestTimeout": boolean (true se for um golpe explícito)
       }
     `;
 
@@ -75,14 +65,13 @@ class KodaAIEngine {
       this.cache.set(hash, result);
       return result;
     } catch (error) {
-      console.warn(`⚠️ [KodaAI] Gemini falhou no texto. Motivo: ${error.message}. Acionando Failover pro Llama...`);
+      console.warn(`⚠️ [KodaAI] Gemini falhou. Motivo: ${error.message}. Acionando Failover pro Llama...`);
       try {
         const fallbackResult = await this._callLlama(prompt);
         this.cache.set(hash, fallbackResult);
         return fallbackResult;
       } catch (critical) {
-        console.error('🚨 [KodaAI] Pane Global nas APIs de IA!', critical.message);
-        return { isThreat: false, type: 'NONE', reason: 'Bypass por falha de API.', confidence: 0, suggestTimeout: false };
+        return { isThreat: false, type: 'NONE', reason: 'Bypass API.', confidence: 0, suggestTimeout: false };
       }
     }
   }
@@ -93,25 +82,20 @@ class KodaAIEngine {
     const base64Data = imageBuffer.toString('base64');
     const hash = this._hashMessage(base64Data); 
 
-    if (this.cache.has(hash)) {
-      return this.cache.get(hash);
-    }
+    if (this.cache.has(hash)) return this.cache.get(hash);
 
     const prompt = `
-      Você é a KodaAI, uma inteligência artificial de cibersegurança e forense digital.
-      Sua missão é realizar OCR (Leitura de Texto) e análise heurística na imagem anexada.
-      Procure ativamente por:
-      1. Comprovantes bancários/PIX falsos ou adulterados.
-      2. Prints de conversas forjadas.
-      3. Textos contendo links de phishing ou golpes (ex: "Acesse o site X para resgatar").
-      4. Conteúdo NSFW (Pornografia, Nudez explícita).
-      5. Gore (Violência extrema, sangue, mutilação).
+      Você é a KodaAI, inteligência artificial de cibersegurança e forense digital.
+      Analise a imagem em busca de:
+      1. Comprovantes bancários/PIX falsos.
+      2. Textos com links de phishing ou golpes.
+      3. Conteúdo NSFW (Pornografia) ou Gore (Violência extrema).
       
-      Retorne APENAS um JSON estrito neste formato e nada mais:
+      Retorne APENAS JSON:
       {
         "isThreat": boolean,
         "type": "NONE" | "FAKE_PRINT" | "IMAGE_SCAM" | "PHISHING_QR" | "NSFW" | "GORE",
-        "reason": "Explicação técnica forense em português para a Staff detalhando o que encontrou na imagem",
+        "reason": "Explicação técnica forense",
         "confidence": number (0 a 100)
       }
     `;
@@ -128,8 +112,8 @@ class KodaAIEngine {
       return parsedData;
 
     } catch (error) {
-      console.warn('⚠️ [KodaAI - Visão] Falha na API do Gemini ao processar imagem.', error.message);
-      return { isThreat: false, type: 'NONE', reason: 'Bypass por falha na engine de visão.', confidence: 0 };
+      console.warn('⚠️ [KodaAI - Visão] Falha na API do Gemini:', error.message);
+      return { isThreat: false, type: 'NONE', reason: 'Bypass Visão.', confidence: 0 };
     }
   }
 
@@ -164,18 +148,14 @@ class KodaAIEngine {
       ],
       imageThreatDeleted: [
         "📸 Tá achando que engana quem com esse print falso? Imagem barrada pela IA.",
-        "Visão! A Koda bateu o olho e já viu que essa imagem era golpe. Apagado.",
-        "PIX falso aqui não passa, chefe. Imagem fraudulenta mandada pro ralo.",
         "Conteúdo visual impróprio detectado. O radar pegou e neutralizou."
       ],
       toxicityDeleted: [
         "🛑 Baixe o tom! Comportamento tóxico não é tolerado aqui.",
         "Calma lá, paizão! Insultos interceptados. Vamos manter o respeito.",
-        "Essa linguagem não passa no meu radar. Mensagem apagada.",
         "⚠️ Briga detectada. Interrompendo a transmissão antes que piore."
       ]
     };
-    
     const list = phrases[type] || phrases['threatDeleted'];
     return list[Math.floor(Math.random() * list.length)];
   }
