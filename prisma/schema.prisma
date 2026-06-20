@@ -12,6 +12,7 @@ model Guild {
   id              String           @id
   logChannelId    String?
   vip             Boolean          @default(false)
+  vipExpiration   DateTime?
   respondMentions Boolean          @default(false)
   
   // Relações obrigatórias para não dar erro no Prisma

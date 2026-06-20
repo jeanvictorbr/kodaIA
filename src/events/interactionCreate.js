@@ -7,7 +7,9 @@ export default {
   name: 'interactionCreate',
   once: false,
   async execute(interaction, client) {
+    // ==========================================
     // 1. GESTÃO DE COMANDOS SLASH
+    // ==========================================
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -21,14 +23,65 @@ export default {
         else await interaction.reply(replyOptions);
       }
     } 
-    // 2. GESTÃO DE COMPONENTES (BOTÕES E MENUS)
+    // ==========================================
+    // 2. GESTÃO DE JANELAS POP-UP (MODALS - VIP)
+    // ==========================================
+    else if (interaction.isModalSubmit()) {
+      try {
+        if (interaction.customId === 'modal_add_vip') {
+          await interaction.deferReply({ ephemeral: true });
+          
+          const guildId = interaction.fields.getTextInputValue('input_guild_id');
+          const days = parseInt(interaction.fields.getTextInputValue('input_vip_days'));
+
+          if (isNaN(days) || days <= 0) {
+            return interaction.editReply('❌ **Erro:** O número de dias precisa ser um valor numérico válido maior que zero.');
+          }
+
+          // Calcula a data de expiração
+          const expirationDate = new Date();
+          expirationDate.setDate(expirationDate.getDate() + days);
+
+          // Salva no banco de dados (Requer o vipExpiration no schema.prisma)
+          await prisma.guild.upsert({
+            where: { id: guildId },
+            update: { vip: true, vipExpiration: expirationDate },
+            create: { id: guildId, vip: true, vipExpiration: expirationDate }
+          });
+
+          // Formata a data para a tag de timestamp nativa do Discord
+          const discordTimestamp = `<t:${Math.floor(expirationDate.getTime() / 1000)}:f>`;
+          const relativeTimestamp = `<t:${Math.floor(expirationDate.getTime() / 1000)}:R>`;
+          
+          return interaction.editReply(`✅ **Licença VIP Ativada com Sucesso!**\n🏢 **Servidor:** \`${guildId}\`\n⏳ **Duração:** ${days} Dias\n⏰ **Expira em:** ${discordTimestamp} (${relativeTimestamp})`);
+        }
+
+        if (interaction.customId === 'modal_remove_vip') {
+          await interaction.deferReply({ ephemeral: true });
+          
+          const guildId = interaction.fields.getTextInputValue('input_guild_id');
+
+          await prisma.guild.upsert({
+            where: { id: guildId },
+            update: { vip: false, vipExpiration: null },
+            create: { id: guildId, vip: false, vipExpiration: null }
+          });
+
+          return interaction.editReply(`🗑️ **Licença VIP Revogada.** O servidor \`${guildId}\` foi rebaixado para o plano FREE e perdeu o acesso ao motor OCR.`);
+        }
+      } catch (error) {
+        console.error('Erro ao processar modal:', error);
+        if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '❌ Falha ao processar formulário.', ephemeral: true });
+      }
+    }
+    // ==========================================
+    // 3. GESTÃO DE COMPONENTES (BOTÕES E MENUS)
+    // ==========================================
     else if (interaction.isButton() || interaction.isStringSelectMenu()) {
       try {
         const customId = interaction.customId;
 
-        // ==========================================
-        // 💻 TERMINAL DEV: ATUALIZAR / INÍCIO
-        // ==========================================
+        // 💻 TERMINAL DEV: INÍCIO E ATUALIZAR
         if (customId === 'dev_refresh' || customId === 'dev_hub') {
           await interaction.deferUpdate();
           
@@ -48,9 +101,7 @@ export default {
           await interaction.editReply({ content: terminalUI, embeds: [], components: [row] });
         }
 
-        // ==========================================
         // 💻 TERMINAL DEV: MÉTRICAS GLOBAIS
-        // ==========================================
         if (customId === 'dev_metrics') {
           await interaction.deferUpdate();
           
@@ -69,9 +120,7 @@ export default {
           await interaction.editReply({ content: metricsUI, components: [btnRow] });
         }
 
-        // ==========================================
-        // 💻 TERMINAL DEV: GESTÃO VIP
-        // ==========================================
+        // 💻 TERMINAL DEV: MENU VIP
         if (customId === 'dev_vip_manager') {
           await interaction.deferUpdate();
           
@@ -86,10 +135,30 @@ export default {
           await interaction.editReply({ content: vipUI, components: [row] });
         }
 
+        // 💻 TERMINAL DEV: ABRIR MODAL DE CONCEDER VIP
+        // Importante: NÃO podemos usar deferUpdate() antes de abrir um Modal!
+        if (customId === 'dev_add_vip') {
+          const modal = new ModalBuilder().setCustomId('modal_add_vip').setTitle('Conceder Licença VIP');
+          const guildIdInput = new TextInputBuilder().setCustomId('input_guild_id').setLabel('ID do Servidor').setStyle(TextInputStyle.Short).setRequired(true);
+          const daysInput = new TextInputBuilder().setCustomId('input_vip_days').setLabel('Duração (em Dias)').setStyle(TextInputStyle.Short).setPlaceholder('Ex: 30').setRequired(true);
 
-        // ==========================================
+          modal.addComponents(new ActionRowBuilder().addComponents(guildIdInput), new ActionRowBuilder().addComponents(daysInput));
+          await interaction.showModal(modal);
+          return;
+        }
+
+        // 💻 TERMINAL DEV: ABRIR MODAL DE REVOGAR VIP
+        if (customId === 'dev_remove_vip') {
+          const modal = new ModalBuilder().setCustomId('modal_remove_vip').setTitle('Revogar Licença VIP');
+          const guildIdInput = new TextInputBuilder().setCustomId('input_guild_id').setLabel('ID do Servidor').setStyle(TextInputStyle.Short).setRequired(true);
+          
+          modal.addComponents(new ActionRowBuilder().addComponents(guildIdInput));
+          await interaction.showModal(modal);
+          return;
+        }
+
+
         // 🏠 MENU PRINCIPAL E TOGGLE DE IA (USUÁRIOS)
-        // ==========================================
         if (customId === 'menu_hub' || customId === 'toggle_mention') {
           await interaction.deferUpdate();
 
@@ -131,9 +200,7 @@ export default {
           await interaction.editReply({ content: '', embeds: [embed], files: [], components: [row1] });
         }
 
-        // ==========================================
         // 📊 DASHBOARD ANALYTICS (GRÁFICO LIMPO)
-        // ==========================================
         if (customId === 'menu_analytics' || customId === 'select_period' || customId === 'refresh_analytics') {
           await interaction.deferUpdate();
 
@@ -210,9 +277,7 @@ export default {
           await interaction.editReply({ content: '', embeds: [analyticsEmbed], files: [chartAttachment], components: [selectRow, btnRow] });
         }
 
-        // ==========================================
         // 🧠 RELATÓRIO DE CONSULTORIA DETALHADO DA IA
-        // ==========================================
         if (customId.startsWith('consultoria_')) {
           await interaction.deferUpdate();
           const days = parseInt(customId.split('_')[1]);
@@ -254,9 +319,7 @@ export default {
           await interaction.editReply({ content: '', embeds: [consultoriaEmbed], files: [], components: [btnRow] });
         }
 
-        // ==========================================
         // ❓ MENU DE AJUDA
-        // ==========================================
         if (customId === 'menu_help') {
           await interaction.deferUpdate();
           const helpEmbed = new EmbedBuilder()
@@ -277,9 +340,7 @@ export default {
           await interaction.editReply({ content: '', embeds: [helpEmbed], files: [], components: [btnRow] });
         }
 
-        // ==========================================
         // 💎 PAINEL VIP (USUÁRIO FINAL)
-        // ==========================================
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
             .setTitle('💎 Módulo VIP - KodaAI')
@@ -289,9 +350,7 @@ export default {
           await interaction.reply({ embeds: [vipEmbed], ephemeral: true });
         }
 
-        // ==========================================
         // 🚨 TESTE DE SEGURANÇA (SETUP)
-        // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
           const embedFake = new EmbedBuilder()
@@ -306,7 +365,7 @@ export default {
         }
 
       } catch (error) { 
-        console.error('Erro de interação:', error); 
+        console.error('Erro de interação (Componentes):', error); 
       }
     }
   }
