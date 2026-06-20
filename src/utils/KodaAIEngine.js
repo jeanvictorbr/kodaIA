@@ -31,12 +31,12 @@ class KodaAIEngine {
   }
 
   /**
-   * 🟢 NOVO: Desliga os filtros da Google. 
-   * Permite que o Gemini analise palavrões, brigas e imagens NSFW sem dar erro.
+   * 🟢 NOVO: Desliga os filtros da Google e usa a versão latest do modelo.
+   * Permite que o Gemini analise palavrões, brigas e imagens NSFW sem dar erro 404.
    */
   _getUncensoredModel() {
     return gemini.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
