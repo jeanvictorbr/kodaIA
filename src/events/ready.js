@@ -1,31 +1,42 @@
 // src/events/ready.js
+import prisma from '../database/prisma.js';
 
 export default {
   name: 'ready',
   once: true,
   async execute(client) {
-    console.log(`\n🔥 [KodaAI] Tá online, pai! Logado como: ${client.user.tag}`);
-    
-    try {
-      const commandsArray = client.commands.map(cmd => cmd.data.toJSON());
-      
-      console.log('🔄 [Discord API] Sincronizando Slash Commands...');
-      
-      const testGuildId = process.env.TEST_GUILD_ID;
+    console.log(`✅ [Bot] Conectado como ${client.user.tag}`);
+    client.user.setActivity('Protegendo servidores | /painel', { type: 3 });
 
-      if (testGuildId) {
-        // Sincroniza apenas no servidor de testes (Atualização imediata)
-        await client.application.commands.set(commandsArray, testGuildId);
-        console.log(`✅ [Discord API] Comandos registrados LOCALMENTE no servidor: ${testGuildId}`);
-      } else {
-        // Sincroniza globalmente
-        await client.application.commands.set(commandsArray);
-        console.log(`✅ [Discord API] Comandos registrados GLOBALMENTE com sucesso!`);
+    // ⏳ O CEIFADOR DE VIPS (Verifica expirações a cada 1 Hora)
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        const expiredGuilds = await prisma.guild.findMany({
+          where: { vip: true, vipExpiration: { lte: now } }
+        });
+
+        if (expiredGuilds.length > 0) {
+          for (const guild of expiredGuilds) {
+            await prisma.guild.update({
+              where: { id: guild.id },
+              data: { vip: false, vipExpiration: null }
+            });
+            console.log(`🗑️ [VIP Expirado Automático] O servidor ${guild.id} foi rebaixado para FREE.`);
+          }
+        }
+      } catch (error) {
+        console.error('🚨 Erro no Ceifador VIP:', error);
       }
-      
-      console.log(`🛡️  Segurança Multi-Guild operante e aguardando chamadas.\n`);
-    } catch (error) {
-      console.error('🚨 [Erro Fatal] Falha ao sincronizar comandos com o Discord:', error);
-    }
+    }, 60 * 60 * 1000); // 1 Hora em milissegundos
+
+    // Roda uma verificação imediata assim que o bot liga
+    try {
+        const now = new Date();
+        await prisma.guild.updateMany({
+          where: { vip: true, vipExpiration: { lte: now } },
+          data: { vip: false, vipExpiration: null }
+        });
+    } catch(e) { console.error('Erro no Ceifador inicial:', e); }
   }
 };

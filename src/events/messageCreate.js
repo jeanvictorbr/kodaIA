@@ -10,7 +10,6 @@ export default {
   async execute(message, client) {
     if (message.author.bot || !message.guild) return;
 
-    // 📊 RASTREAMENTO DE ENGAJAMENTO
     try {
       const dbGuild = await prisma.guild.findUnique({ where: { id: message.guild.id } });
       if (dbGuild) {
@@ -22,13 +21,12 @@ export default {
           create: { guildId: message.guild.id, date: today, messages: 1 }
         });
       }
-    } catch (e) { /* Falha silenciosa pra não travar o bot */ }
+    } catch (e) { }
 
-    // Carrega ou cria Guild no banco para checar menções e logs
     let dbGuild = await prisma.guild.findUnique({ where: { id: message.guild.id } });
     if (!dbGuild) dbGuild = await prisma.guild.create({ data: { id: message.guild.id } });
 
-    // 💬 IA: RESPOSTA A MENÇÕES (COM CONHECIMENTO DE SI MESMA)
+    // 💬 IA: RESPOSTA A MENÇÕES
     if (message.mentions.has(client.user.id) && !message.reference && dbGuild.respondMentions) {
       const cleanContent = message.content.replace(`<@${client.user.id}>`, '').trim();
       
@@ -36,7 +34,6 @@ export default {
         try {
             await message.channel.sendTyping();
             
-            // 🧠 O "CÉREBRO" DA KODAAI: Aqui ela aprende tudo sobre si mesma
             const systemPrompt = `Você é a KodaAI, o sistema de segurança e moderação mais letal e inteligente do Discord.
 Regras de conduta: Responda de forma curta, levemente sarcástica e direta. NUNCA invente comandos ou funções. Baseie-se apenas nisto:
 
@@ -51,7 +48,7 @@ Seus Comandos Oficiais:
 - /dev : Painel restrito apenas para o seu criador gerenciar acessos VIP.
 
 Como Configurar:
-Se perguntarem como te configurar, diga que o Administrador só precisa digitar "/setup e /painel para ver infos" para criar a base de operações automaticamente, e "/painel" para ver os gráficos.`;
+Se perguntarem como te configurar, diga que o Administrador só precisa digitar "/setup" para criar a base de operações automaticamente, e "/painel" para ver os gráficos.`;
 
             const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
               model: "llama-3.1-8b-instant",
@@ -59,21 +56,18 @@ Se perguntarem como te configurar, diga que o Administrador só precisa digitar 
                   { role: "system", content: systemPrompt },
                   { role: "user", content: cleanContent }
               ],
-              temperature: 0.5 // Mais baixo = Menos alucinações, mais factual
+              temperature: 0.5 
             }, {
               headers: { 'Authorization': `Bearer ${process.env.LLAMA_API_KEY}`, 'Content-Type': 'application/json' },
               timeout: 10000
             });
             
             await message.reply(response.data.choices[0].message.content);
-            return; // Impede que a conversa normal passe pelo filtro de segurança pesado
+            return; 
         } catch(e) { console.error("Falha ao responder menção:", e.message); }
       }
     }
 
-    // ==========================================
-    // 🛡️ MOTOR ANTI-BYPASS E RADAR
-    // ==========================================
     if (!dbGuild.logChannelId) return;
 
     const content = message.content.toLowerCase();
@@ -103,34 +97,47 @@ Se perguntarem como te configurar, diga que o Administrador só precisa digitar 
       }
 
       if (analysis.isThreat) {
-        await message.delete().catch(() => {});
+        // 🛡️ NOVO: Tratamento de erro elegante de Permissões
+        let actionError = null;
         let timeoutApplied = false;
+
+        try {
+          if (message.deletable) await message.delete();
+          else actionError = 'A KodaAI não possui permissão para apagar mensagens neste canal.';
+        } catch (e) { actionError = 'Falha ao apagar mensagem.'; }
         
         if (tier === 'VIP' && analysis.suggestTimeout) {
           try {
-            await message.member.timeout(10 * 60 * 1000, `KodaAI: ${analysis.type}`);
-            timeoutApplied = true;
-            await message.author.send(`⚠️ Você foi silenciado em **${message.guild.name}** por 10 minutos devido a comportamento tóxico. Esfrie a cabeça!`).catch(()=>{});
+            if (message.member && message.member.manageable) {
+              await message.member.timeout(10 * 60 * 1000, `KodaAI: ${analysis.type}`);
+              timeoutApplied = true;
+              await message.author.send(`⚠️ Você foi silenciado em **${message.guild.name}** por 10 minutos devido a comportamento tóxico. Esfrie a cabeça!`).catch(()=>{});
+            } else {
+              actionError = actionError ? actionError + '\nO membro tem um cargo superior à KodaAI (Impossível aplicar Timeout).' : 'O membro tem um cargo superior à KodaAI (Impossível aplicar Timeout).';
+            }
           } catch (e) { }
         }
 
         let phraseType = imageAttachment ? 'imageThreatDeleted' : (analysis.type === 'TOXICITY' || analysis.type === 'SEVERE_INSULT' ? 'toxicityDeleted' : 'threatDeleted');
-        const alertMsg = await message.channel.send({ content: `⚠️ <@${message.author.id}>, ${KodaAIEngine.getRandomPhrase(phraseType)}` });
-        setTimeout(() => alertMsg.delete().catch(() => {}), 10000);
+        const alertMsg = await message.channel.send({ content: `⚠️ <@${message.author.id}>, ${KodaAIEngine.getRandomPhrase(phraseType)}` }).catch(()=>{});
+        if(alertMsg) setTimeout(() => alertMsg.delete().catch(() => {}), 10000);
 
         const logChannel = message.guild.channels.cache.get(dbGuild.logChannelId) || await message.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
         if (logChannel) {
           const logEmbed = new EmbedBuilder()
-            .setTitle(imageAttachment ? '📸 Impróprio Bloqueado' : '🚨 Ameaça Neutralizada').setColor('#ED4245')
+            .setTitle(imageAttachment ? '📸 Impróprio Detectado' : '🚨 Ameaça Detectada').setColor(actionError ? '#E67E22' : '#ED4245')
             .addFields(
               { name: '👤 Usuário', value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
               { name: '📍 Canal', value: `<#${message.channel.id}>`, inline: true },
               { name: '🛑 Tipo', value: `\`${analysis.type || 'Ameaça'}\``, inline: true },
               { name: '🤖 Análise KodaAI', value: analysis.reason || 'Executada nativamente.', inline: false }
             ).setTimestamp();
-          if (timeoutApplied) logEmbed.addFields({ name: '⏱️ Ação VIP', value: '**Timeout de 10 Minutos**.', inline: false });
+          
+          if (timeoutApplied) logEmbed.addFields({ name: '⏱️ Ação VIP', value: '**Timeout de 10 Minutos aplicado**.', inline: false });
+          if (actionError) logEmbed.addFields({ name: '⚠️ Falha na Ação Automática', value: actionError, inline: false });
+          
           if (imageAttachment) logEmbed.setThumbnail(imageAttachment.url);
-          else if (message.content) logEmbed.addFields({ name: '💬 Texto Apagado', value: `\`\`\`text\n${message.content.substring(0, 1000)}\n\`\`\``, inline: false });
+          else if (message.content) logEmbed.addFields({ name: '💬 Mensagem Original', value: `\`\`\`text\n${message.content.substring(0, 1000)}\n\`\`\``, inline: false });
 
           await logChannel.send({ embeds: [logEmbed] }).catch(()=>{});
         }

@@ -16,7 +16,6 @@ export default {
 
       if (!dbGuild || !dbGuild.logChannelId) return;
 
-      // 📊 ANOTA A ENTRADA (JOINS)
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
       await prisma.dailyAnalytics.upsert({
@@ -25,7 +24,6 @@ export default {
         create: { guildId: member.guild.id, date: today, joins: 1 }
       }).catch(()=>{});
 
-      // Lógica de Segurança original Anti-Raid...
       const accountAgeMs = Date.now() - member.user.createdTimestamp;
       const accountAgeDays = Math.floor(accountAgeMs / (1000 * 60 * 60 * 24));
       let riskLevel = 'LOW';
@@ -38,13 +36,18 @@ export default {
 
       if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
         const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId) || await member.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
-        let actionTaken = 'Nenhuma ação automática.';
+        let actionTaken = 'Nenhuma ação automática (Modo FREE).';
 
+        // 🛡️ NOVO: Tratamento de erro ao tentar expulsar
         if (dbGuild.vip && riskLevel === 'CRITICAL') {
           try {
-            await member.kick('KodaAI VIP: Risco Crítico de Raid.');
-            actionTaken = '🥾 **KICK AUTOMÁTICO**';
-          } catch (e) { actionTaken = 'Falha ao kickar.'; }
+            if (member.kickable) {
+              await member.kick('KodaAI VIP: Risco Crítico de Raid.');
+              actionTaken = '🥾 **KICK AUTOMÁTICO APLICADO**';
+            } else {
+              actionTaken = '⚠️ **FALHA AO EXPULSAR**: A KodaAI não tem permissões ou possui um cargo menor que o do usuário.';
+            }
+          } catch (e) { actionTaken = '⚠️ **ERRO INTERNO AO EXPULSAR**.'; }
         }
         
         if (logChannel) {
@@ -55,7 +58,7 @@ export default {
               { name: '👤 Usuário', value: `${member.user.tag}`, inline: true },
               { name: '📅 Idade', value: `${accountAgeDays} dias`, inline: true },
               { name: '⚠️ Motivo', value: reason.join('\n'), inline: false },
-              { name: '🤖 Ação', value: actionTaken, inline: false }
+              { name: '🤖 Ação Tomada', value: actionTaken, inline: false }
             ).setTimestamp();
           await logChannel.send({ embeds: [alertEmbed] });
         }
