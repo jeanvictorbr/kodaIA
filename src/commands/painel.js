@@ -16,21 +16,21 @@ export default {
       .addFields(
         { 
           name: '📊 Dashboard de Analytics', 
-          value: "```yaml\nVisualize o tráfego de mensagens, retenção de membros e obtenha consultoria gerada por IA.\n
-```" 
+          value: '```yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n```' 
         },
         { 
           name: '💬 Resposta a Menções', 
-          value: "```yaml\nAtive para que a KodaAI responda no chat quando for mencionada (Consome mais tokens).\n```" 
+          value: '```yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n
+```' 
         },
         { 
           name: '❓ Central de Ajuda', 
-          value: "```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n
-```" 
+          value: '```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n```' 
         },
         { 
           name: '💎 Gestão VIP', 
-          value: "```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n```" 
+          value: '```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n
+```' 
         }
       );
 

@@ -24,6 +24,9 @@ export default {
       try {
         const customId = interaction.customId;
 
+        // ==========================================
+        // 🏠 MENU PRINCIPAL (HUB)
+        // ==========================================
         if (customId === 'menu_hub') {
           await interaction.deferUpdate();
           const embed = new EmbedBuilder()
@@ -31,12 +34,11 @@ export default {
             .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
             .setColor('#2b2d31')
             .addFields(
-              { name: '📊 Dashboard de Analytics', value: "```yaml\nVisualize o tráfego de mensagens, retenção de membros e obtenha consultoria gerada por IA.\n
-```" },
-              { name: '💬 Resposta a Menções', value: "```yaml\nAtive para que a KodaAI responda no chat quando for mencionada (Consome mais tokens).\n```" },
-              { name: '❓ Central de Ajuda', value: "```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n```" },
-              { name: '💎 Gestão VIP', value: "```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n
-```" }
+              { name: '📊 Dashboard de Analytics', value: '```yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n```' },
+              { name: '💬 Resposta a Menções', value: '```yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n```' },
+              { name: '❓ Central de Ajuda', value: '```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n```' },
+              { name: '💎 Gestão VIP', value: '```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n
+```' }
             );
 
           const row1 = new ActionRowBuilder().addComponents(
@@ -49,6 +51,9 @@ export default {
           await interaction.editReply({ content: '', embeds: [embed], files: [], components: [row1] });
         }
 
+        // ==========================================
+        // 💬 TOGGLE: ATIVAR/DESATIVAR MENÇÕES
+        // ==========================================
         if (customId === 'toggle_mention') {
             await interaction.deferUpdate();
             let dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
@@ -65,6 +70,9 @@ export default {
             await interaction.followUp({ content: `✅ As respostas automáticas da KodaAI foram **${newState ? 'ATIVADAS' : 'DESATIVADAS'}** neste servidor!`, ephemeral: true });
         }
 
+        // ==========================================
+        // 📊 DASHBOARD ANALYTICS E GRÁFICO
+        // ==========================================
         if (customId === 'menu_analytics' || customId === 'select_period' || customId === 'refresh_analytics') {
           await interaction.deferUpdate();
 
@@ -134,6 +142,9 @@ export default {
           await interaction.editReply({ content: appUIContent, files: [chartAttachment], embeds: [], components: [selectRow, btnRow] });
         }
 
+        // ==========================================
+        // ❓ MENU DE AJUDA
+        // ==========================================
         if (customId === 'menu_help') {
           await interaction.deferUpdate();
           const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n*   **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n*   **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n*   **Anti-Raid:** Analiso a idade e a reputação global de quem entra.\n*   **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão.\n\n### 🛠️ Comandos Disponíveis\n*   \`/painel\` - Abre a interface nativa.\n*   \`/setup\` - Cria a base de operações segura.\n*   \`/dev\` - Gerencia as licenças VIP e métricas.\n\n*A KodaAI opera silenciosamente.*`;
@@ -145,20 +156,26 @@ export default {
           await interaction.editReply({ content: helpContent, files: [], embeds: [], components: [btnRow] });
         }
 
+        // ==========================================
+        // 💎 PAINEL VIP
+        // ==========================================
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
             .setTitle('💎 Módulo VIP - KodaAI')
-            .setDescription('Acesso restrito. O plano VIP libera **OCR (Leitura de Imagens e Prints)**, bloqueio avançado de **NSFW/Gore** e o sistema implacável de **Timeout e Kick Automático**.\n\n*Contate o desenvolvedor para adquirir.*')
+            .setDescription('Acesso restrito. O plano VIP libera **OCR (Leitura de Imagens e Prints)**, bloqueio avançado de **NSFW/Gore** e o sistema implacável de **Timeout e Kick Automático**.\n\n*Contate o desenvolvedor para adquirir a licença.*')
             .setColor('#FEE75C');
 
           await interaction.reply({ embeds: [vipEmbed], ephemeral: true });
         }
 
+        // ==========================================
+        // 🚨 TESTE DE SEGURANÇA (SETUP)
+        // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
           const embedFake = new EmbedBuilder()
             .setTitle('🚨 [TESTE] Ameaça Neutralizada').setColor('#ED4245')
-            .addFields({ name: 'Tipo', value: 'PHISHING_SIMULADO' }, { name: 'Análise KodaAI', value: 'Teste disparado. Operante.' }).setTimestamp();
+            .addFields({ name: 'Tipo', value: 'PHISHING_SIMULADO' }, { name: 'Análise KodaAI', value: 'Teste disparado pelo painel de Setup. Operante.' }).setTimestamp();
 
           const dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
           if (dbGuild && dbGuild.logChannelId) {
@@ -167,7 +184,9 @@ export default {
           }
         }
 
-      } catch (error) { console.error('Erro de interação:', error); }
+      } catch (error) { 
+        console.error('Erro de interação:', error); 
+      }
     }
   }
 };
