@@ -1,90 +1,52 @@
 // src/commands/dev.js
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import prisma from '../database/prisma.js';
-import KodaAIEngine from '../utils/KodaAIEngine.js';
+import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+
+// ⚠️ COLOQUE O SEU ID DO DISCORD AQUI PARA BLINDAR O COMANDO
+const DEVELOPER_ID = 'SEU_ID_AQUI'; 
 
 export default {
   data: new SlashCommandBuilder()
     .setName('dev')
-    .setDescription('🛠️ Painel do Desenvolvedor KodaAI (Acesso Restrito).')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Esconde de membros comuns
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('vip')
-        .setDescription('Ativa ou desativa o status VIP de um servidor.')
-        .addStringOption(option =>
-          option.setName('servidor_id')
-            .setDescription('O ID do Servidor (Guild ID)')
-            .setRequired(true))
-        .addBooleanOption(option =>
-          option.setName('status')
-            .setDescription('True para ativar VIP, False para remover')
-            .setRequired(true))
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('status')
-        .setDescription('Mostra a performance da nave em tempo real.')
-    ),
-
+    .setDescription('💻 [Owner] Terminal Global de Administração da KodaAI'),
+    
   async execute(interaction, client) {
-    // 🔒 TRAVA DE SEGURANÇA ABSOLUTA
-    if (interaction.user.id !== process.env.DEV_ID) {
+    // 🔒 Barreira de Segurança Suprema
+    if (interaction.user.id !== DEVELOPER_ID) {
       return interaction.reply({ 
-        content: '🚫 Sai fora, Zé! Acesso negado. Esse comando é só pro engenheiro chefe da nave.', 
+        content: '❌ **Acesso Negado.** Este terminal é restrito à arquitetura de desenvolvimento.', 
         ephemeral: true 
       });
     }
 
     await interaction.deferReply({ ephemeral: true });
 
-    const subcommand = interaction.options.getSubcommand();
+    // 📊 Coleta de Métricas do Sistema em Tempo Real
+    const ping = client.ws.ping;
+    const uptime = (client.uptime / 1000 / 60 / 60).toFixed(1); // Em horas
+    const ramUsada = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+    const limiteRam = 150; // Limite do seu discloud.config
+    
+    const ramStatus = ramUsada > 120 ? '🔴 CRÍTICO' : ramUsada > 90 ? '🟡 ALERTA' : '🟢 ESTÁVEL';
 
-    // ==========================================
-    // 💎 MÓDULO: GERENCIAR VIP
-    // ==========================================
-    if (subcommand === 'vip') {
-      const guildId = interaction.options.getString('servidor_id');
-      const status = interaction.options.getBoolean('status');
+    // 🖥️ UI Nativa do Terminal
+    const terminalUI = `## 💻 Terminal do Desenvolvedor
+*Módulo de Administração Global KodaAI*
 
-      try {
-        // Upsert: Atualiza se existir, ou já cria no banco com o VIP ativado
-        await prisma.guild.upsert({
-          where: { id: guildId },
-          update: { vip: status },
-          create: { id: guildId, vip: status }
-        });
+**📡 Status do Sistema Motor:**
+\`\`\`yaml
+Latência (Ping) : ${ping}ms
+Uptime          : ${uptime} Horas Online
+Memória (RAM)   : ${ramUsada}MB / ${limiteRam}MB [${ramStatus}]
+\`\`\`
 
-        return interaction.editReply({ 
-          content: `✅ **Suave!** O status VIP do servidor \`${guildId}\` foi alterado para: **${status ? 'ATIVADO 💎' : 'DESATIVADO 🆓'}**.\nO módulo de OCR (Visão) já deve estar respondendo lá.` 
-        });
-      } catch (error) {
-        console.error('Erro ao atualizar VIP:', error);
-        return interaction.editReply({ content: '❌ Deu B.O ao tentar acessar o banco de dados.' });
-      }
-    }
+Selecione um dos módulos de gestão abaixo para operar a infraestrutura:`;
 
-    // ==========================================
-    // 📊 MÓDULO: STATUS DE PERFORMANCE
-    // ==========================================
-    if (subcommand === 'status') {
-      // Cálculo de RAM sendo usada no momento
-      const ramUsage = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
-      const cacheSize = KodaAIEngine.cache.size;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('dev_metrics').setLabel('Métricas Globais').setStyle(ButtonStyle.Primary).setEmoji('📊'),
+      new ButtonBuilder().setCustomId('dev_vip_manager').setLabel('Gestão VIP').setStyle(ButtonStyle.Success).setEmoji('💎'),
+      new ButtonBuilder().setCustomId('dev_refresh').setLabel('Atualizar Rede').setStyle(ButtonStyle.Secondary).setEmoji('🔄')
+    );
 
-      const embed = new EmbedBuilder()
-        .setTitle('🛠️ KodaAI - Telemetria do Sistema')
-        .setColor('#2B2D31')
-        .addFields(
-          { name: '🖥️ Servidores Ativos', value: `\`${client.guilds.cache.size}\``, inline: true },
-          { name: '💾 RAM Utilizada', value: `\`${ramUsage} MB\``, inline: true },
-          { name: '🧠 Cache da IA (Otimização)', value: `\`${cacheSize} itens\``, inline: true },
-          { name: '🟢 Ping da API', value: `\`${client.ws.ping}ms\``, inline: true }
-        )
-        .setFooter({ text: 'Engenharia de Alta Performance' })
-        .setTimestamp();
-
-      return interaction.editReply({ embeds: [embed] });
-    }
+    await interaction.editReply({ content: terminalUI, components: [row] });
   }
 };

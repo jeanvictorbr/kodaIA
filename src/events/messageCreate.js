@@ -10,48 +10,71 @@ export default {
   async execute(message, client) {
     if (message.author.bot || !message.guild) return;
 
-    // 1. Carrega ou cria Guild no banco
+    // 📊 RASTREAMENTO DE ENGAJAMENTO
+    try {
+      const dbGuild = await prisma.guild.findUnique({ where: { id: message.guild.id } });
+      if (dbGuild) {
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        await prisma.dailyAnalytics.upsert({
+          where: { guildId_date: { guildId: message.guild.id, date: today } },
+          update: { messages: { increment: 1 } },
+          create: { guildId: message.guild.id, date: today, messages: 1 }
+        });
+      }
+    } catch (e) { /* Falha silenciosa pra não travar o bot */ }
+
+    // Carrega ou cria Guild no banco para checar menções e logs
     let dbGuild = await prisma.guild.findUnique({ where: { id: message.guild.id } });
     if (!dbGuild) dbGuild = await prisma.guild.create({ data: { id: message.guild.id } });
 
-    // 2. Rastreamento Analítico
-    try {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      await prisma.dailyAnalytics.upsert({
-        where: { guildId_date: { guildId: message.guild.id, date: today } },
-        update: { messages: { increment: 1 } },
-        create: { guildId: message.guild.id, date: today, messages: 1 }
-      });
-    } catch (e) { /* Falha silenciosa */ }
-
-    // 3. IA: Resposta a Menções (Apenas se o dono ativou no Painel)
+    // 💬 IA: RESPOSTA A MENÇÕES (COM CONHECIMENTO DE SI MESMA)
     if (message.mentions.has(client.user.id) && !message.reference && dbGuild.respondMentions) {
       const cleanContent = message.content.replace(`<@${client.user.id}>`, '').trim();
       
       if (cleanContent.length > 0) {
         try {
-            await message.channel.sendTyping(); // Mostra "KodaAI está a escrever..."
+            await message.channel.sendTyping();
+            
+            // 🧠 O "CÉREBRO" DA KODAAI: Aqui ela aprende tudo sobre si mesma
+            const systemPrompt = `Você é a KodaAI, o sistema de segurança e moderação mais letal e inteligente do Discord.
+Regras de conduta: Responda de forma curta, levemente sarcástica e direta. NUNCA invente comandos ou funções. Baseie-se apenas nisto:
+
+Suas Funções:
+1. Radar de Texto (Grátis): Bloqueia phishing, links suspeitos, golpes (ex: nitro free) e toxicidade/palavrões.
+2. Radar Visual (Módulo VIP): Lê imagens (OCR) para bloquear prints de PIX falsos, pornografia (NSFW) e gore.
+3. Anti-Raid: Avalia a idade e reputação global de membros novos.
+
+Seus Comandos Oficiais:
+- /setup : O comando mais importante. O dono usa isso para configurar o canal de logs e ativar a segurança.
+- /painel : Abre o dashboard nativo de Analytics, Consultoria de IA e botões de configuração (como ativar você no chat).
+- /dev : Painel restrito apenas para o seu criador gerenciar acessos VIP.
+
+Como Configurar:
+Se perguntarem como te configurar, diga que o Administrador só precisa digitar "/setup e /painel para ver infos" para criar a base de operações automaticamente, e "/painel" para ver os gráficos.`;
+
             const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
               model: "llama-3.1-8b-instant",
               messages: [
-                  { role: "system", content: "Você é a KodaAI, uma assistente de moderação e segurança. Responda de forma extremamente curta, levemente sarcástica, direta e amigável." },
+                  { role: "system", content: systemPrompt },
                   { role: "user", content: cleanContent }
               ],
-              temperature: 0.7 
+              temperature: 0.5 // Mais baixo = Menos alucinações, mais factual
             }, {
               headers: { 'Authorization': `Bearer ${process.env.LLAMA_API_KEY}`, 'Content-Type': 'application/json' },
               timeout: 10000
             });
             
             await message.reply(response.data.choices[0].message.content);
-            return; // Impede a continuação para não acionar o radar em conversas normais
+            return; // Impede que a conversa normal passe pelo filtro de segurança pesado
         } catch(e) { console.error("Falha ao responder menção:", e.message); }
       }
     }
 
-    // 4. Radar de Segurança Base
-    if (!dbGuild.logChannelId) return; // Só protege se configurado
+    // ==========================================
+    // 🛡️ MOTOR ANTI-BYPASS E RADAR
+    // ==========================================
+    if (!dbGuild.logChannelId) return;
 
     const content = message.content.toLowerCase();
     const hasLink = /https?:\/\/[^\s]+/.test(content);
@@ -60,8 +83,8 @@ export default {
     const normalizedText = content.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/0/g, 'o').replace(/[@4]/g, 'a').replace(/3/g, 'e').replace(/[1!]/g, 'i').replace(/5/g, 's').replace(/7/g, 't').replace(/[.,_*\-\|/]/g, '');
     const toxicRegex = /\b(cuzao|cusao|cusam|vadia|vadio|coco|vagabunda|vagabundo|vagabund|arrombado|arrombada|arrombad|fdp|puta|puto|corno|corna|merda|desgraca|desgracado|viado|veado|retardado|retardada|macaco|lixo|foder|foda|caralho|buceta|pica|rola|cacete|babaca|otario|idiota|imbecil|vsf|tnc|krl|pqp|vtc|filhodaputa|rapariga|cadela)\b/i;
     const hasToxicWords = toxicRegex.test(normalizedText);
+    
     const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
-
     if (!hasLink && !hasSuspiciousWords && !hasToxicWords && !imageAttachment) return;
 
     try {
@@ -74,7 +97,7 @@ export default {
         const imageBuffer = Buffer.from(response.data);
         analysis = await KodaAIEngine.analyzeImage(imageBuffer, imageAttachment.contentType);
       } else if (hasToxicWords) {
-        analysis = { isThreat: true, type: 'SEVERE_INSULT', reason: 'Filtro Local Avançado: Palavra de baixo calão detectada.', confidence: 100, suggestTimeout: true };
+        analysis = { isThreat: true, type: 'SEVERE_INSULT', reason: 'Filtro Local Avançado: Palavra de baixo calão ou evasão detectada.', confidence: 100, suggestTimeout: true };
       } else if (hasLink || hasSuspiciousWords) {
         analysis = await KodaAIEngine.analyzeText(message.content, tier);
       }
@@ -85,7 +108,7 @@ export default {
         
         if (tier === 'VIP' && analysis.suggestTimeout) {
           try {
-            await message.member.timeout(10 * 60 * 1000, `KodaAI Automoderation: ${analysis.type}`);
+            await message.member.timeout(10 * 60 * 1000, `KodaAI: ${analysis.type}`);
             timeoutApplied = true;
             await message.author.send(`⚠️ Você foi silenciado em **${message.guild.name}** por 10 minutos devido a comportamento tóxico. Esfrie a cabeça!`).catch(()=>{});
           } catch (e) { }
@@ -98,16 +121,14 @@ export default {
         const logChannel = message.guild.channels.cache.get(dbGuild.logChannelId) || await message.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
         if (logChannel) {
           const logEmbed = new EmbedBuilder()
-            .setTitle(imageAttachment ? '📸 Fraude/Conteúdo Impróprio Bloqueado' : '🚨 Ameaça/Toxicidade Neutralizada')
-            .setColor('#ED4245')
+            .setTitle(imageAttachment ? '📸 Impróprio Bloqueado' : '🚨 Ameaça Neutralizada').setColor('#ED4245')
             .addFields(
               { name: '👤 Usuário', value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
               { name: '📍 Canal', value: `<#${message.channel.id}>`, inline: true },
               { name: '🛑 Tipo', value: `\`${analysis.type || 'Ameaça'}\``, inline: true },
-              { name: '🤖 Análise Forense KodaAI', value: analysis.reason || 'Análise direta executada.', inline: false }
+              { name: '🤖 Análise KodaAI', value: analysis.reason || 'Executada nativamente.', inline: false }
             ).setTimestamp();
-
-          if (timeoutApplied) logEmbed.addFields({ name: '⏱️ Ação VIP Automática', value: 'Usuário recebeu **Timeout de 10 Minutos**.', inline: false });
+          if (timeoutApplied) logEmbed.addFields({ name: '⏱️ Ação VIP', value: '**Timeout de 10 Minutos**.', inline: false });
           if (imageAttachment) logEmbed.setThumbnail(imageAttachment.url);
           else if (message.content) logEmbed.addFields({ name: '💬 Texto Apagado', value: `\`\`\`text\n${message.content.substring(0, 1000)}\n\`\`\``, inline: false });
 
@@ -122,7 +143,6 @@ export default {
           });
         }
       }
-
     } catch (error) { console.error('🚨 Erro no radar:', error); }
   }
 };

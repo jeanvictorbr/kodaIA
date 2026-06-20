@@ -1,5 +1,5 @@
 // src/events/interactionCreate.js
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, AttachmentBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import prisma from '../database/prisma.js';
 import KodaAIEngine from '../utils/KodaAIEngine.js';
 
@@ -7,6 +7,7 @@ export default {
   name: 'interactionCreate',
   once: false,
   async execute(interaction, client) {
+    // 1. GESTÃO DE COMANDOS SLASH
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -20,12 +21,74 @@ export default {
         else await interaction.reply(replyOptions);
       }
     } 
+    // 2. GESTÃO DE COMPONENTES (BOTÕES E MENUS)
     else if (interaction.isButton() || interaction.isStringSelectMenu()) {
       try {
         const customId = interaction.customId;
 
         // ==========================================
-        // 🏠 MENU PRINCIPAL E TOGGLE DE IA
+        // 💻 TERMINAL DEV: ATUALIZAR / INÍCIO
+        // ==========================================
+        if (customId === 'dev_refresh' || customId === 'dev_hub') {
+          await interaction.deferUpdate();
+          
+          const ping = client.ws.ping;
+          const uptime = (client.uptime / 1000 / 60 / 60).toFixed(1);
+          const ramUsada = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+          const ramStatus = ramUsada > 120 ? '🔴 CRÍTICO' : ramUsada > 90 ? '🟡 ALERTA' : '🟢 ESTÁVEL';
+
+          const terminalUI = `## 💻 Terminal do Desenvolvedor\n*Módulo de Administração Global KodaAI*\n\n**📡 Status do Sistema Motor:**\n\`\`\`yaml\nLatência (Ping) : ${ping}ms\nUptime          : ${uptime} Horas Online\nMemória (RAM)   : ${ramUsada}MB / 150MB [${ramStatus}]\n\`\`\`\n\nSelecione um dos módulos de gestão abaixo para operar a infraestrutura:`;
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('dev_metrics').setLabel('Métricas Globais').setStyle(ButtonStyle.Primary).setEmoji('📊'),
+            new ButtonBuilder().setCustomId('dev_vip_manager').setLabel('Gestão VIP').setStyle(ButtonStyle.Success).setEmoji('💎'),
+            new ButtonBuilder().setCustomId('dev_refresh').setLabel('Atualizar Rede').setStyle(ButtonStyle.Secondary).setEmoji('🔄')
+          );
+
+          await interaction.editReply({ content: terminalUI, embeds: [], components: [row] });
+        }
+
+        // ==========================================
+        // 💻 TERMINAL DEV: MÉTRICAS GLOBAIS
+        // ==========================================
+        if (customId === 'dev_metrics') {
+          await interaction.deferUpdate();
+          
+          const totalGuilds = client.guilds.cache.size;
+          const totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+          
+          const dbGuilds = await prisma.guild.count();
+          const dbVips = await prisma.guild.count({ where: { vip: true } });
+
+          const metricsUI = `## 📊 Métricas Globais da Base\n*Estatísticas de alcance da rede KodaAI*\n\n**Escala da Operação:**\n\`\`\`yaml\nServidores Ativos : ${totalGuilds}\nUsuários Radar    : ${totalUsers}\nRegistros (DB)    : ${dbGuilds} Comunidades\nLicenças VIP      : ${dbVips} Ativas\n\`\`\``;
+
+          const btnRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('dev_hub').setLabel('Voltar ao Terminal').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
+          );
+
+          await interaction.editReply({ content: metricsUI, components: [btnRow] });
+        }
+
+        // ==========================================
+        // 💻 TERMINAL DEV: GESTÃO VIP
+        // ==========================================
+        if (customId === 'dev_vip_manager') {
+          await interaction.deferUpdate();
+          
+          const vipUI = `## 💎 Gerenciador de Licenças VIP\n*Módulo Financeiro e de Concessão de Acessos*\n\nAqui você controla quem tem acesso ao motor OCR, moderação automática e limites de segurança aprimorados. O que deseja fazer?`;
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('dev_add_vip').setLabel('Conceder VIP').setStyle(ButtonStyle.Success).setEmoji('➕'),
+            new ButtonBuilder().setCustomId('dev_remove_vip').setLabel('Revogar VIP').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
+            new ButtonBuilder().setCustomId('dev_hub').setLabel('Voltar ao Terminal').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
+          );
+
+          await interaction.editReply({ content: vipUI, components: [row] });
+        }
+
+
+        // ==========================================
+        // 🏠 MENU PRINCIPAL E TOGGLE DE IA (USUÁRIOS)
         // ==========================================
         if (customId === 'menu_hub' || customId === 'toggle_mention') {
           await interaction.deferUpdate();
@@ -139,7 +202,6 @@ export default {
           );
 
           const btnRow = new ActionRowBuilder().addComponents(
-            // 🧠 NOVO BOTÃO DE CONSULTORIA
             new ButtonBuilder().setCustomId(`consultoria_${days}`).setLabel('Gerar Consultoria IA').setStyle(ButtonStyle.Success).setEmoji('🧠'),
             new ButtonBuilder().setCustomId('refresh_analytics').setLabel('Atualizar Dados').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
             new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
@@ -166,7 +228,6 @@ export default {
           let totalMsgs = 0, totalJoins = 0, totalLeaves = 0;
           analytics.forEach(day => { totalMsgs += day.messages; totalJoins += day.joins; totalLeaves += day.leaves; });
 
-          // Prompt massivo para extrair uma consultoria de verdade
           const prompt = `Você é um Cientista de Dados focado em retenção de comunidades no Discord. Analise os dados dos últimos ${days} dias deste servidor:
           - Total de Mensagens: ${totalMsgs}
           - Novas Entradas: ${totalJoins}
@@ -184,7 +245,7 @@ export default {
             .setTitle(`🧠 Relatório de Inteligência - KodaAI`)
             .setColor('#ff00aa')
             .setDescription(`Abaixo está o relatório gerado pela nossa inteligência artificial analisando o comportamento dos seus membros nos últimos ${days} dias.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${insight}`)
-            .setFooter({ text: 'Nota: O rastreio individual de canais e painel de horários de pico chegará nas próximas atualizações.' });
+            .setFooter({ text: 'Nota: O rastreio individual de canais chegará nas próximas atualizações.' });
 
           const btnRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('menu_analytics').setLabel('Voltar ao Dashboard').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
@@ -217,7 +278,7 @@ export default {
         }
 
         // ==========================================
-        // 💎 PAINEL VIP
+        // 💎 PAINEL VIP (USUÁRIO FINAL)
         // ==========================================
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
@@ -229,7 +290,7 @@ export default {
         }
 
         // ==========================================
-        // 🚨 TESTE DE SEGURANÇA
+        // 🚨 TESTE DE SEGURANÇA (SETUP)
         // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
