@@ -25,7 +25,7 @@ export default {
         const customId = interaction.customId;
 
         // ==========================================
-        // 🏠 MENU PRINCIPAL E TOGGLE DE IA (REATIVO)
+        // 🏠 MENU PRINCIPAL E TOGGLE DE IA
         // ==========================================
         if (customId === 'menu_hub' || customId === 'toggle_mention') {
           await interaction.deferUpdate();
@@ -45,7 +45,7 @@ export default {
 
           const embed = new EmbedBuilder()
             .setTitle('⚙️ Central de Controle KodaAI')
-            .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
+            .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
             .setColor('#2b2d31')
             .addFields(
               { name: '📊 Dashboard de Analytics', value: `\`\`\`yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n\`\`\`` },
@@ -69,7 +69,7 @@ export default {
         }
 
         // ==========================================
-        // 📊 DASHBOARD ANALYTICS E GRÁFICO OTIMIZADO
+        // 📊 DASHBOARD ANALYTICS (GRÁFICO LIMPO)
         // ==========================================
         if (customId === 'menu_analytics' || customId === 'select_period' || customId === 'refresh_analytics') {
           await interaction.deferUpdate();
@@ -119,21 +119,16 @@ export default {
           const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=2b2d31&devicePixelRatio=2`;
           const chartAttachment = new AttachmentBuilder(chartUrl, { name: 'dashboard.png' });
 
-          // 🧠 IA Blindada: Instrução para apenas 1 frase curta
-          const prompt = `Consultor tech de comunidades Discord. Dados de ${days} dias: Mensagens: ${totalMsgs}, Entradas: ${totalJoins}, Saídas: ${totalLeaves}. Dê UMA dica genial em EXATAMENTE UMA FRASE CURTA para melhorar o engajamento do servidor. Seja direto.`;
-          const insight = await KodaAIEngine.getConsultingInsight(prompt);
-
-          // 💎 Design Limpo e Profissional no Embed
           const analyticsEmbed = new EmbedBuilder()
             .setTitle(`📊 Analytics: ${interaction.guild.name} (${days} Dias)`)
             .setColor('#2b2d31')
+            .setDescription('Métricas operacionais e retenção da comunidade.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
             .addFields(
               { name: '💬 Mensagens', value: `\`\`\`\n${totalMsgs}\n\`\`\``, inline: true },
               { name: '📥 Entradas', value: `\`\`\`\n${totalJoins}\n\`\`\``, inline: true },
-              { name: '📤 Saídas', value: `\`\`\`\n${totalLeaves}\n\`\`\``, inline: true },
-              { name: '🧠 Consultoria IA', value: `> ${insight}`, inline: false }
+              { name: '📤 Saídas', value: `\`\`\`\n${totalLeaves}\n\`\`\``, inline: true }
             )
-            .setImage('attachment://dashboard.png'); // Imagem embutida perfeitamente
+            .setImage('attachment://dashboard.png');
 
           const selectRow = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder().setCustomId('select_period').setPlaceholder('📅 Alterar Período de Análise').addOptions(
@@ -144,11 +139,58 @@ export default {
           );
 
           const btnRow = new ActionRowBuilder().addComponents(
+            // 🧠 NOVO BOTÃO DE CONSULTORIA
+            new ButtonBuilder().setCustomId(`consultoria_${days}`).setLabel('Gerar Consultoria IA').setStyle(ButtonStyle.Success).setEmoji('🧠'),
             new ButtonBuilder().setCustomId('refresh_analytics').setLabel('Atualizar Dados').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
-            new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Início').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
+            new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
           );
 
           await interaction.editReply({ content: '', embeds: [analyticsEmbed], files: [chartAttachment], components: [selectRow, btnRow] });
+        }
+
+        // ==========================================
+        // 🧠 RELATÓRIO DE CONSULTORIA DETALHADO DA IA
+        // ==========================================
+        if (customId.startsWith('consultoria_')) {
+          await interaction.deferUpdate();
+          const days = parseInt(customId.split('_')[1]);
+
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - days);
+          startDate.setUTCHours(0,0,0,0);
+
+          let analytics = await prisma.dailyAnalytics.findMany({
+            where: { guildId: interaction.guildId, date: { gte: startDate } }
+          });
+
+          let totalMsgs = 0, totalJoins = 0, totalLeaves = 0;
+          analytics.forEach(day => { totalMsgs += day.messages; totalJoins += day.joins; totalLeaves += day.leaves; });
+
+          // Prompt massivo para extrair uma consultoria de verdade
+          const prompt = `Você é um Cientista de Dados focado em retenção de comunidades no Discord. Analise os dados dos últimos ${days} dias deste servidor:
+          - Total de Mensagens: ${totalMsgs}
+          - Novas Entradas: ${totalJoins}
+          - Total de Saídas: ${totalLeaves}
+          
+          Crie um relatório curto, direto e esteticamente agradável contendo:
+          1. Uma estimativa da Taxa de Retenção (%) com base em entradas vs saídas.
+          2. Uma avaliação do nível de engajamento atual.
+          3. Três ideias criativas de eventos ou dinâmicas para aquecer o servidor e aumentar a participação.
+          Formate a sua resposta usando Markdown do Discord, emojis e listas.`;
+
+          const insight = await KodaAIEngine.getConsultingInsight(prompt);
+
+          const consultoriaEmbed = new EmbedBuilder()
+            .setTitle(`🧠 Relatório de Inteligência - KodaAI`)
+            .setColor('#ff00aa')
+            .setDescription(`Abaixo está o relatório gerado pela nossa inteligência artificial analisando o comportamento dos seus membros nos últimos ${days} dias.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${insight}`)
+            .setFooter({ text: 'Nota: O rastreio individual de canais e painel de horários de pico chegará nas próximas atualizações.' });
+
+          const btnRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('menu_analytics').setLabel('Voltar ao Dashboard').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
+          );
+
+          await interaction.editReply({ content: '', embeds: [consultoriaEmbed], files: [], components: [btnRow] });
         }
 
         // ==========================================
@@ -187,7 +229,7 @@ export default {
         }
 
         // ==========================================
-        // 🚨 TESTE DE SEGURANÇA (SETUP)
+        // 🚨 TESTE DE SEGURANÇA
         // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
