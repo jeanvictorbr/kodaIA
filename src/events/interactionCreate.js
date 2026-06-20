@@ -33,7 +33,6 @@ export default {
           let dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
           if (!dbGuild) dbGuild = await prisma.guild.create({ data: { id: interaction.guildId } });
 
-          // Se o botão for o toggle, inverte o estado no banco de dados antes de renderizar
           if (customId === 'toggle_mention') {
             dbGuild = await prisma.guild.update({
               where: { id: interaction.guildId },
@@ -70,7 +69,7 @@ export default {
         }
 
         // ==========================================
-        // 📊 DASHBOARD ANALYTICS E GRÁFICO
+        // 📊 DASHBOARD ANALYTICS E GRÁFICO OTIMIZADO
         // ==========================================
         if (customId === 'menu_analytics' || customId === 'select_period' || customId === 'refresh_analytics') {
           await interaction.deferUpdate();
@@ -120,10 +119,21 @@ export default {
           const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=2b2d31&devicePixelRatio=2`;
           const chartAttachment = new AttachmentBuilder(chartUrl, { name: 'dashboard.png' });
 
-          const prompt = `Consultor tech de comunidades Discord. Dados de ${days} dias: Mensagens: ${totalMsgs}, Entradas: ${totalJoins}, Saídas: ${totalLeaves}. Dê UMA dica genial e curta (máx 3 linhas) para melhorar engajamento.`;
+          // 🧠 IA Blindada: Instrução para apenas 1 frase curta
+          const prompt = `Consultor tech de comunidades Discord. Dados de ${days} dias: Mensagens: ${totalMsgs}, Entradas: ${totalJoins}, Saídas: ${totalLeaves}. Dê UMA dica genial em EXATAMENTE UMA FRASE CURTA para melhorar o engajamento do servidor. Seja direto.`;
           const insight = await KodaAIEngine.getConsultingInsight(prompt);
 
-          const appUIContent = `## 📊 Analytics: ${interaction.guild.name} (${days} Dias)\n**Estatísticas:** \`💬 ${totalMsgs} Msgs\` ➖ \`📥 ${totalJoins} Entradas\` ➖ \`📤 ${totalLeaves} Saídas\`\n\n**🧠 IA:**\n> ${insight}`;
+          // 💎 Design Limpo e Profissional no Embed
+          const analyticsEmbed = new EmbedBuilder()
+            .setTitle(`📊 Analytics: ${interaction.guild.name} (${days} Dias)`)
+            .setColor('#2b2d31')
+            .addFields(
+              { name: '💬 Mensagens', value: `\`\`\`\n${totalMsgs}\n\`\`\``, inline: true },
+              { name: '📥 Entradas', value: `\`\`\`\n${totalJoins}\n\`\`\``, inline: true },
+              { name: '📤 Saídas', value: `\`\`\`\n${totalLeaves}\n\`\`\``, inline: true },
+              { name: '🧠 Consultoria IA', value: `> ${insight}`, inline: false }
+            )
+            .setImage('attachment://dashboard.png'); // Imagem embutida perfeitamente
 
           const selectRow = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder().setCustomId('select_period').setPlaceholder('📅 Alterar Período de Análise').addOptions(
@@ -138,7 +148,7 @@ export default {
             new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Início').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
           );
 
-          await interaction.editReply({ content: appUIContent, files: [chartAttachment], embeds: [], components: [selectRow, btnRow] });
+          await interaction.editReply({ content: '', embeds: [analyticsEmbed], files: [chartAttachment], components: [selectRow, btnRow] });
         }
 
         // ==========================================
@@ -146,17 +156,26 @@ export default {
         // ==========================================
         if (customId === 'menu_help') {
           await interaction.deferUpdate();
-          const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n* **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n* **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n* **Anti-Raid:** Analiso a idade e a reputação global de quem entra.\n* **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão.\n\n### 🛠️ Comandos Disponíveis\n* \`/painel\` - Abre a interface nativa.\n* \`/setup\` - Cria a base de operações segura.\n* \`/dev\` - Gerencia as licenças VIP e métricas.\n\n*A KodaAI opera silenciosamente.*`;
+          const helpEmbed = new EmbedBuilder()
+            .setTitle('❓ Central de Ajuda - KodaAI')
+            .setDescription('O sistema anti-raid e anti-scam mais letal e inteligente do Discord.')
+            .setColor('#2b2d31')
+            .addFields(
+                { name: '🛡️ Radar de Texto', value: 'Intercepta links de phishing, nitro falso e golpes.' },
+                { name: '👁️ Radar Visual (VIP)', value: 'Faz OCR em imagens para bloquear PIX falso, NSFW e Gore.' },
+                { name: '⚡ Moderação Ativa', value: 'Bloqueio de raids por idade de conta e filtro anti-toxicidade implacável.' },
+                { name: '🛠️ Comandos', value: '`/painel` - Dashboard nativo\n`/setup` - Configurar segurança\n`/dev` - Painel do desenvolvedor' }
+            );
           
           const btnRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Menu Principal').setStyle(ButtonStyle.Primary).setEmoji('🏠')
+            new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Menu Principal').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
           );
 
-          await interaction.editReply({ content: helpContent, files: [], embeds: [], components: [btnRow] });
+          await interaction.editReply({ content: '', embeds: [helpEmbed], files: [], components: [btnRow] });
         }
 
         // ==========================================
-        // 💎 PAINEL VIP E SETUP LOG
+        // 💎 PAINEL VIP
         // ==========================================
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
@@ -167,6 +186,9 @@ export default {
           await interaction.reply({ embeds: [vipEmbed], ephemeral: true });
         }
 
+        // ==========================================
+        // 🚨 TESTE DE SEGURANÇA (SETUP)
+        // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
           const embedFake = new EmbedBuilder()
