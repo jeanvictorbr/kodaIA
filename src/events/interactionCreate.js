@@ -25,48 +25,48 @@ export default {
         const customId = interaction.customId;
 
         // ==========================================
-        // 🏠 MENU PRINCIPAL (HUB)
+        // 🏠 MENU PRINCIPAL E TOGGLE DE IA (REATIVO)
         // ==========================================
-        if (customId === 'menu_hub') {
+        if (customId === 'menu_hub' || customId === 'toggle_mention') {
           await interaction.deferUpdate();
+
+          let dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
+          if (!dbGuild) dbGuild = await prisma.guild.create({ data: { id: interaction.guildId } });
+
+          // Se o botão for o toggle, inverte o estado no banco de dados antes de renderizar
+          if (customId === 'toggle_mention') {
+            dbGuild = await prisma.guild.update({
+              where: { id: interaction.guildId },
+              data: { respondMentions: !dbGuild.respondMentions }
+            });
+          }
+
+          const iaStatus = dbGuild.respondMentions ? '🟢 ATIVADO' : '🔴 DESATIVADO';
+          const vipStatus = dbGuild.vip ? '💎 ATIVO' : '🆓 FREE';
+
           const embed = new EmbedBuilder()
             .setTitle('⚙️ Central de Controle KodaAI')
             .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
             .setColor('#2b2d31')
             .addFields(
               { name: '📊 Dashboard de Analytics', value: `\`\`\`yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n\`\`\`` },
-              { name: '💬 Resposta a Menções', value: `\`\`\`yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n\`\`\`` },
-              { name: '❓ Central de Ajuda', value: `\`\`\`yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n\`\`\`` },
-              { name: '💎 Gestão VIP', value: `\`\`\`yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n\`\`\`` }
+              { name: `💬 Resposta a Menções [${iaStatus}]`, value: `\`\`\`yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n\`\`\`` },
+              { name: `💎 Gestão VIP [${vipStatus}]`, value: `\`\`\`yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n\`\`\`` },
+              { name: '❓ Central de Ajuda', value: `\`\`\`yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n\`\`\`` }
             );
 
           const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Secondary).setEmoji('📊'),
-            new ButtonBuilder().setCustomId('toggle_mention').setLabel('IA Respostas').setStyle(ButtonStyle.Secondary).setEmoji('💬'),
+            new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Primary).setEmoji('📊'),
+            new ButtonBuilder()
+              .setCustomId('toggle_mention')
+              .setLabel(dbGuild.respondMentions ? 'Desativar IA' : 'Ativar IA')
+              .setStyle(dbGuild.respondMentions ? ButtonStyle.Danger : ButtonStyle.Success)
+              .setEmoji('💬'),
             new ButtonBuilder().setCustomId('menu_help').setLabel('Ajuda').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
-            new ButtonBuilder().setCustomId('vip_dashboard').setLabel('Upgrade VIP').setStyle(ButtonStyle.Success).setEmoji('💎')
+            new ButtonBuilder().setCustomId('vip_dashboard').setLabel('Upgrade VIP').setStyle(ButtonStyle.Secondary).setEmoji('💎')
           );
 
           await interaction.editReply({ content: '', embeds: [embed], files: [], components: [row1] });
-        }
-
-        // ==========================================
-        // 💬 TOGGLE: ATIVAR/DESATIVAR MENÇÕES
-        // ==========================================
-        if (customId === 'toggle_mention') {
-            await interaction.deferUpdate();
-            let dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
-            if (!dbGuild) {
-                dbGuild = await prisma.guild.create({ data: { id: interaction.guildId } });
-            }
-            
-            const newState = !dbGuild.respondMentions;
-            await prisma.guild.update({
-                where: { id: interaction.guildId },
-                data: { respondMentions: newState }
-            });
-
-            await interaction.followUp({ content: `✅ As respostas automáticas da KodaAI foram **${newState ? 'ATIVADAS' : 'DESATIVADAS'}** neste servidor!`, ephemeral: true });
         }
 
         // ==========================================
@@ -156,7 +156,7 @@ export default {
         }
 
         // ==========================================
-        // 💎 PAINEL VIP
+        // 💎 PAINEL VIP E SETUP LOG
         // ==========================================
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
@@ -167,9 +167,6 @@ export default {
           await interaction.reply({ embeds: [vipEmbed], ephemeral: true });
         }
 
-        // ==========================================
-        // 🚨 TESTE DE SEGURANÇA (SETUP)
-        // ==========================================
         if (customId === 'test_security_log') {
           await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
           const embedFake = new EmbedBuilder()
