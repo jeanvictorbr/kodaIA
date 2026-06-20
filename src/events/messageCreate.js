@@ -13,13 +13,10 @@ export default {
     const content = message.content.toLowerCase();
     const hasLink = /https?:\/\/[^\s]+/.test(content);
     const hasSuspiciousWords = /(nitro.*free|steam.*gift|discord.*promo|clique.*aqui)/.test(content);
-    
-    // Gatilho de Palavras Tóxicas para economizar chamadas de IA
     const hasToxicWords = /(lixo|macaco|fdp|cuzão|arrombado|retardado|viado|vagabundo|morre|mata|preto|puta|corno|merda|desgraça)/i.test(content);
     
     const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
 
-    // Se não tiver texto suspeito, palavras tóxicas E não tiver imagem, passa reto
     if (!hasLink && !hasSuspiciousWords && !hasToxicWords && !imageAttachment) return;
 
     try {
@@ -32,9 +29,6 @@ export default {
       const tier = dbGuild.vip ? 'VIP' : 'FREE';
       let analysis = { isThreat: false };
 
-      // ==========================================
-      // 💎 MÓDULO VIP: Análise de Imagem (OCR/NSFW)
-      // ==========================================
       if (imageAttachment && tier === 'VIP') {
         if (imageAttachment.size > 5 * 1024 * 1024) return;
 
@@ -42,34 +36,24 @@ export default {
         const imageBuffer = Buffer.from(response.data);
 
         analysis = await KodaAIEngine.analyzeImage(imageBuffer, imageAttachment.contentType);
-      } 
-      // ==========================================
-      // 🆓 MÓDULO FREE/VIP: Análise de Texto
-      // ==========================================
-      else if (hasLink || hasSuspiciousWords || hasToxicWords) {
+      } else if (hasLink || hasSuspiciousWords || hasToxicWords) {
         analysis = await KodaAIEngine.analyzeText(message.content, tier);
       }
 
-      // ==========================================
-      // 🚨 EXECUTANDO A PUNIÇÃO E GERANDO LOG
-      // ==========================================
       if (analysis.isThreat) {
         await message.delete().catch(() => {});
 
-        // 💎 PUNIÇÃO VIP: Aplica Timeout de 10 minutos se for briga/toxicidade grave
         let timeoutApplied = false;
         if (tier === 'VIP' && analysis.suggestTimeout) {
           try {
             await message.member.timeout(10 * 60 * 1000, `KodaAI Automoderation: ${analysis.type}`);
             timeoutApplied = true;
-            
             await message.author.send(`⚠️ Você foi silenciado no servidor **${message.guild.name}** por 10 minutos devido a comportamento tóxico. Esfrie a cabeça!`).catch(()=>{});
           } catch (e) {
-            console.log('⚠️ [KodaAI] O bot não tem permissão/hierarquia para dar Timeout neste usuário.');
+            console.log('⚠️ [KodaAI] O bot não tem permissão para dar Timeout neste usuário.');
           }
         }
 
-        // Seleciona a frase de alerta baseada no tipo de ofensa
         let phraseType = 'threatDeleted';
         if (imageAttachment) phraseType = 'imageThreatDeleted';
         if (analysis.type === 'TOXICITY' || analysis.type === 'SEVERE_INSULT') phraseType = 'toxicityDeleted';
@@ -80,7 +64,8 @@ export default {
 
         setTimeout(() => alertMsg.delete().catch(() => {}), 10000);
 
-        const logChannel = message.guild.channels.cache.get(dbGuild.logChannelId);
+        // 🟢 CORREÇÃO: Força o bot a procurar o canal na API (fetch) se não estiver na RAM (cache)
+        const logChannel = message.guild.channels.cache.get(dbGuild.logChannelId) || await message.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
         
         if (logChannel) {
           const logEmbed = new EmbedBuilder()
@@ -89,10 +74,11 @@ export default {
             .addFields(
               { name: '👤 Usuário', value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
               { name: '📍 Canal', value: `<#${message.channel.id}>`, inline: true },
-              { name: '🛑 Tipo', value: `\`${analysis.type}\``, inline: true },
-              { name: '🤖 Análise Forense KodaAI', value: analysis.reason, inline: false }
+              { name: '🛑 Tipo', value: `\`${analysis.type || 'Ameaça'}\``, inline: true },
+              // Proteção contra falhas da IA omitir a string de razão
+              { name: '🤖 Análise Forense KodaAI', value: analysis.reason || 'Análise direta executada sem justificativa extensa.', inline: false }
             )
-            .setFooter({ text: `Confiança da IA: ${analysis.confidence}% | Nível: ${tier}` })
+            .setFooter({ text: `Confiança da IA: ${analysis.confidence || 100}% | Nível: ${tier}` })
             .setTimestamp();
 
           if (timeoutApplied) {
@@ -105,10 +91,10 @@ export default {
              logEmbed.addFields({ name: '💬 Texto Apagado', value: `\`\`\`text\n${message.content.substring(0, 1000)}\n\`\`\``, inline: false });
           }
 
-          await logChannel.send({ embeds: [logEmbed] });
+          // Adicionado catch para garantir que erros de permissão de envio não crashem o radar silenciosamente
+          await logChannel.send({ embeds: [logEmbed] }).catch(err => console.error("🚨 Falha ao enviar Log Embed:", err));
         }
 
-        // Ficha Suja no Banco Global (Apenas para Scams/Phishing)
         if (analysis.type !== 'TOXICITY' && analysis.type !== 'SEVERE_INSULT') {
           await prisma.globalReputation.upsert({
             where: { userId: message.author.id },

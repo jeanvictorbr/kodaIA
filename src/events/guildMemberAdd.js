@@ -6,19 +6,16 @@ export default {
   name: 'guildMemberAdd',
   once: false,
   async execute(member, client) {
-    if (member.user.bot) return; // Ignora outros bots
+    if (member.user.bot) return;
 
     try {
-      // 1. Pega as configs do Servidor e a Ficha Global do cara no nosso banco
       const [dbGuild, userReputation] = await Promise.all([
         prisma.guild.findUnique({ where: { id: member.guild.id } }),
         prisma.globalReputation.findUnique({ where: { userId: member.id } })
       ]);
 
-      // Se o server não tem a KodaAI configurada, não fazemos nada
       if (!dbGuild || !dbGuild.logChannelId) return;
 
-      // 2. Lógica Anti-Raid Heurística (O cálculo matemático do risco)
       const accountAgeMs = Date.now() - member.user.createdTimestamp;
       const accountAgeDays = Math.floor(accountAgeMs / (1000 * 60 * 60 * 24));
       
@@ -35,12 +32,11 @@ export default {
         reason.push(`Ficha Suja Global: Reputação baixa (${userReputation.trustScore}/100) por enviar scams em outros servidores.`);
       }
 
-      // 3. Ação Baseada no Risco
       if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
-        const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId);
+        // 🟢 CORREÇÃO: Força o bot a procurar o canal com fetch
+        const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId) || await member.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
         let actionTaken = 'Nenhuma ação automática (Servidor FREE ou Risco apenas Alto).';
 
-        // 💎 Ação VIP: Kick Automático em invasores de risco CRÍTICO
         if (dbGuild.vip && riskLevel === 'CRITICAL') {
           try {
             await member.kick('KodaAI VIP: Risco Crítico de Raid detectado na entrada.');
@@ -53,7 +49,7 @@ export default {
         if (logChannel) {
           const alertEmbed = new EmbedBuilder()
             .setTitle('🛡️ Alerta de Segurança Anti-Raid')
-            .setColor(riskLevel === 'CRITICAL' ? '#992D22' : '#E67E22') // Vermelho escuro ou Laranja
+            .setColor(riskLevel === 'CRITICAL' ? '#992D22' : '#E67E22')
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .setDescription(`Um usuário de alto risco acabou de entrar no servidor. Fiquem de olho.`)
             .addFields(
