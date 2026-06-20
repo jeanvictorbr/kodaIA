@@ -19,17 +19,14 @@ class KodaAIEngine {
    */
   _extractJSON(text) {
     try {
-      // Procura exatamente o bloco que começa com { e termina com }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-      // Se não achar as chaves, tenta fazer o parse direto
       return JSON.parse(text);
     } catch (error) {
       console.error('🚨 [KodaAI] A IA alucinou e não mandou um JSON válido. Texto recebido:\n', text);
-      // Fallback seguro pra nave não crashar
-      return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida da IA.', confidence: 0 };
+      return { isThreat: false, type: 'NONE', reason: 'Bypass por resposta corrompida da IA.', confidence: 0, suggestTimeout: false };
     }
   }
 
@@ -43,16 +40,17 @@ class KodaAIEngine {
 
     const prompt = `
       Você é a KodaAI, um sistema rigoroso de segurança de comunidades.
-      Analise a mensagem abaixo e determine se é um golpe, phishing, scam, ou link malicioso.
+      Analise a mensagem abaixo e determine se é um golpe, phishing, scam, OU se contém Toxicidade/Brigas (insultos graves, racismo, homofobia, ameaças de morte, assédio).
       
       Mensagem do usuário: "${content}"
       
       Retorne APENAS um JSON válido neste formato exato e nada mais:
       {
         "isThreat": boolean,
-        "type": "NONE" | "SCAM_TEXT" | "PHISHING" | "SUSPICIOUS_LINK",
+        "type": "NONE" | "SCAM_TEXT" | "PHISHING" | "SUSPICIOUS_LINK" | "TOXICITY" | "SEVERE_INSULT",
         "reason": "Explicação técnica direta e profissional em português para a Staff",
-        "confidence": number (0 a 100)
+        "confidence": number (0 a 100),
+        "suggestTimeout": boolean (true se a ofensa for grave e merecer punição no Discord)
       }
     `;
 
@@ -62,14 +60,13 @@ class KodaAIEngine {
       return result;
     } catch (error) {
       console.warn('⚠️ [KodaAI] Gemini falhou no texto. Acionando Failover pro Llama...');
-
       try {
         const fallbackResult = await this._callLlama(prompt);
         this.cache.set(hash, fallbackResult);
         return fallbackResult;
       } catch (critical) {
         console.error('🚨 [KodaAI] Pane Global nas APIs de IA!', critical);
-        return { isThreat: false, type: 'NONE', reason: 'Bypass por falha de API.', confidence: 0 };
+        return { isThreat: false, type: 'NONE', reason: 'Bypass por falha de API.', confidence: 0, suggestTimeout: false };
       }
     }
   }
@@ -91,11 +88,13 @@ class KodaAIEngine {
       1. Comprovantes bancários/PIX falsos ou adulterados.
       2. Prints de conversas forjadas.
       3. Textos contendo links de phishing ou golpes (ex: "Acesse o site X para resgatar").
+      4. Conteúdo NSFW (Pornografia, Nudez explícita).
+      5. Gore (Violência extrema, sangue, mutilação).
       
       Retorne APENAS um JSON estrito neste formato e nada mais:
       {
         "isThreat": boolean,
-        "type": "NONE" | "FAKE_PRINT" | "IMAGE_SCAM" | "PHISHING_QR",
+        "type": "NONE" | "FAKE_PRINT" | "IMAGE_SCAM" | "PHISHING_QR" | "NSFW" | "GORE",
         "reason": "Explicação técnica forense em português para a Staff detalhando o que encontrou na imagem",
         "confidence": number (0 a 100)
       }
@@ -108,9 +107,7 @@ class KodaAIEngine {
         { inlineData: { data: base64Data, mimeType } }
       ]);
       
-      // Passa a resposta da IA no nosso extrator blindado
       const parsedData = this._extractJSON(result.response.text());
-      
       this.cache.set(hash, parsedData);
       return parsedData;
 
@@ -123,16 +120,14 @@ class KodaAIEngine {
   async _callGemini(prompt) {
     const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
     const response = await model.generateContent(prompt);
-    
-    // Passa a resposta da IA no nosso extrator blindado
     return this._extractJSON(response.response.text());
   }
 
-async _callLlama(prompt) {
+  async _callLlama(prompt) {
     const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
       model: "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.1 // Temperatura baixa para ser mais preciso no JSON
+      temperature: 0.1
     }, {
       headers: { 
         'Authorization': `Bearer ${process.env.LLAMA_API_KEY}`,
@@ -140,8 +135,6 @@ async _callLlama(prompt) {
       },
       timeout: 10000 
     });
-    
-    // Passa a resposta da IA no nosso extrator blindado
     return this._extractJSON(response.data.choices[0].message.content);
   }
 
@@ -157,7 +150,13 @@ async _callLlama(prompt) {
         "📸 Tá achando que engana quem com esse print falso? Imagem barrada pela IA.",
         "Visão! A Koda bateu o olho e já viu que essa imagem era golpe. Apagado.",
         "PIX falso aqui não passa, chefe. Imagem fraudulenta mandada pro ralo.",
-        "QR Code malicioso? Texto camuflado na foto? O radar pegou e neutralizou."
+        "Conteúdo visual impróprio detectado. O radar pegou e neutralizou."
+      ],
+      toxicityDeleted: [
+        "🛑 Baixe o tom! Comportamento tóxico não é tolerado aqui.",
+        "Calma lá, paizão! Insultos interceptados. Vamos manter o respeito.",
+        "Essa linguagem não passa no meu radar. Mensagem apagada.",
+        "⚠️ Briga detectada. Interrompendo a transmissão antes que piore."
       ]
     };
     

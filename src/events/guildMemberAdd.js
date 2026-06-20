@@ -36,11 +36,19 @@ export default {
       }
 
       // 3. Ação Baseada no Risco
-      const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId);
-
       if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
-        // Se for servidor VIP, a gente pode dar Kick/Ban automático aqui. 
-        // No FREE, a gente alerta a Staff de forma agressiva.
+        const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId);
+        let actionTaken = 'Nenhuma ação automática (Servidor FREE ou Risco apenas Alto).';
+
+        // 💎 Ação VIP: Kick Automático em invasores de risco CRÍTICO
+        if (dbGuild.vip && riskLevel === 'CRITICAL') {
+          try {
+            await member.kick('KodaAI VIP: Risco Crítico de Raid detectado na entrada.');
+            actionTaken = '🥾 **KICK APLICADO AUTOMATICAMENTE** (Modo VIP Anti-Raid)';
+          } catch (e) {
+            actionTaken = 'Falha ao aplicar Kick automático (Falta de permissão do Bot ou hierarquia de cargos).';
+          }
+        }
         
         if (logChannel) {
           const alertEmbed = new EmbedBuilder()
@@ -51,7 +59,8 @@ export default {
             .addFields(
               { name: '👤 Usuário', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
               { name: '📅 Idade da Conta', value: `${accountAgeDays} dia(s)`, inline: true },
-              { name: '⚠️ Motivo do Alerta', value: reason.join('\n'), inline: false }
+              { name: '⚠️ Motivo do Alerta', value: reason.join('\n'), inline: false },
+              { name: '🤖 Ação da KodaAI', value: actionTaken, inline: false }
             )
             .setFooter({ text: 'KodaAI - Monitoramento de Entrada' })
             .setTimestamp();
