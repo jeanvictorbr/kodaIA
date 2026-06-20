@@ -7,7 +7,6 @@ export default {
   name: 'interactionCreate',
   once: false,
   async execute(interaction, client) {
-    // Tratamento de Comandos Slash normais
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -15,46 +14,63 @@ export default {
       try {
         await command.execute(interaction, client);
       } catch (error) {
-        console.error(`🚨 [Erro] B.O no comando ${interaction.commandName}:`, error);
-        const replyOptions = { content: 'Deu ruim internamente. A staff já tá ligada.', ephemeral: true };
+        console.error(`🚨 [Erro] Comando ${interaction.commandName}:`, error);
+        const replyOptions = { content: 'Deu erro interno. Tente novamente mais tarde.', ephemeral: true };
         if (interaction.replied || interaction.deferred) await interaction.followUp(replyOptions);
         else await interaction.reply(replyOptions);
       }
     } 
-    // Tratamento de Botões e Menus de Seleção do Dashboard
     else if (interaction.isButton() || interaction.isStringSelectMenu()) {
       try {
         const customId = interaction.customId;
 
-        // 🎛️ NAVEGAÇÃO: Voltar ao Menu Principal (Hub)
         if (customId === 'menu_hub') {
           await interaction.deferUpdate();
           const embed = new EmbedBuilder()
             .setTitle('⚙️ Central de Controle KodaAI')
-            .setDescription('Bem-vindo ao painel de controle nativo. Escolha o módulo que deseja acessar abaixo:')
+            .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
             .setColor('#2b2d31')
             .addFields(
-              { name: '📊 Analytics (FREE)', value: 'Métricas de engajamento, retenção e IA consultiva.' },
-              { name: '❓ Ajuda e Comandos', value: 'Descubra como a KodaAI protege seu servidor.' },
-              { name: '💎 Módulo VIP', value: 'Gerencie OCR, limites e punições automáticas.' }
+              { name: '📊 Dashboard de Analytics', value: "```yaml\nVisualize o tráfego de mensagens, retenção de membros e obtenha consultoria gerada por IA.\n
+```" },
+              { name: '💬 Resposta a Menções', value: "```yaml\nAtive para que a KodaAI responda no chat quando for mencionada (Consome mais tokens).\n```" },
+              { name: '❓ Central de Ajuda', value: "```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n```" },
+              { name: '💎 Gestão VIP', value: "```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n
+```" }
             );
 
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Primary).setEmoji('📊'),
+          const row1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Secondary).setEmoji('📊'),
+            new ButtonBuilder().setCustomId('toggle_mention').setLabel('IA Respostas').setStyle(ButtonStyle.Secondary).setEmoji('💬'),
             new ButtonBuilder().setCustomId('menu_help').setLabel('Ajuda').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
             new ButtonBuilder().setCustomId('vip_dashboard').setLabel('Upgrade VIP').setStyle(ButtonStyle.Success).setEmoji('💎')
           );
 
-          await interaction.editReply({ content: '', embeds: [embed], files: [], components: [row] });
+          await interaction.editReply({ content: '', embeds: [embed], files: [], components: [row1] });
         }
 
-        // 📊 NAVEGAÇÃO: Analytics & Gráficos (E troca de Período)
-        if (customId === 'menu_analytics' || customId === 'select_period') {
+        if (customId === 'toggle_mention') {
+            await interaction.deferUpdate();
+            let dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
+            if (!dbGuild) {
+                dbGuild = await prisma.guild.create({ data: { id: interaction.guildId } });
+            }
+            
+            const newState = !dbGuild.respondMentions;
+            await prisma.guild.update({
+                where: { id: interaction.guildId },
+                data: { respondMentions: newState }
+            });
+
+            await interaction.followUp({ content: `✅ As respostas automáticas da KodaAI foram **${newState ? 'ATIVADAS' : 'DESATIVADAS'}** neste servidor!`, ephemeral: true });
+        }
+
+        if (customId === 'menu_analytics' || customId === 'select_period' || customId === 'refresh_analytics') {
           await interaction.deferUpdate();
 
-          // Se veio do menu de seleção, pega os dias escolhidos. Se veio do botão principal, o padrão é 7.
-          const days = interaction.isStringSelectMenu() ? parseInt(interaction.values[0]) : 7;
-          
+          let days = 7;
+          if (interaction.isStringSelectMenu()) days = parseInt(interaction.values[0]);
+
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - days);
           startDate.setUTCHours(0,0,0,0);
@@ -64,25 +80,17 @@ export default {
             orderBy: { date: 'asc' }
           });
 
-          if (analytics.length === 0) {
-            analytics = [{ date: new Date(), messages: 0, joins: 0, leaves: 0 }];
-          }
+          if (analytics.length === 0) analytics = [{ date: new Date(), messages: 0, joins: 0, leaves: 0 }];
 
-          const labels = [];
-          const messagesData = [];
-          const joinsData = [];
+          const labels = []; const messagesData = []; const joinsData = [];
           let totalMsgs = 0, totalJoins = 0, totalLeaves = 0;
 
           analytics.forEach(day => {
             labels.push(`${day.date.getDate()}/${day.date.getMonth()+1}`);
-            messagesData.push(day.messages);
-            joinsData.push(day.joins);
-            totalMsgs += day.messages;
-            totalJoins += day.joins;
-            totalLeaves += day.leaves;
+            messagesData.push(day.messages); joinsData.push(day.joins);
+            totalMsgs += day.messages; totalJoins += day.joins; totalLeaves += day.leaves;
           });
 
-          // ✨ DESIGN PREMIUM DO GRÁFICO (Fontes Maiores, Alta Resolução e Linhas Neon)
           const chartConfig = {
             type: 'line',
             data: {
@@ -94,10 +102,7 @@ export default {
             },
             options: {
               layout: { padding: 20 },
-              plugins: {
-                legend: { labels: { color: '#ffffff', font: { size: 16, family: 'sans-serif' } }, position: 'top' },
-                title: { display: false }
-              },
+              plugins: { legend: { labels: { color: '#ffffff', font: { size: 16, family: 'sans-serif' } }, position: 'top' } },
               scales: {
                 x: { ticks: { color: '#e0e0e0', font: { size: 14 } }, grid: { color: 'rgba(255, 255, 255, 0.1)', drawBorder: false } },
                 y: { ticks: { color: '#e0e0e0', font: { size: 14 }, beginAtZero: true }, grid: { color: 'rgba(255, 255, 255, 0.1)', drawBorder: false } }
@@ -105,38 +110,33 @@ export default {
             }
           };
 
-          // devicePixelRatio=2 dobra a qualidade e nitidez da imagem
           const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=2b2d31&devicePixelRatio=2`;
           const chartAttachment = new AttachmentBuilder(chartUrl, { name: 'dashboard.png' });
 
-          const prompt = `Consultor tech de comunidades Discord. Dados de ${days} dias: Mensagens: ${totalMsgs}, Entradas: ${totalJoins}, Saídas: ${totalLeaves}. Dê UMA dica genial e curta (máx 3 linhas) para melhorar engajamento ou retenção.`;
+          const prompt = `Consultor tech de comunidades Discord. Dados de ${days} dias: Mensagens: ${totalMsgs}, Entradas: ${totalJoins}, Saídas: ${totalLeaves}. Dê UMA dica genial e curta (máx 3 linhas) para melhorar engajamento.`;
           const insight = await KodaAIEngine.getConsultingInsight(prompt);
 
-          const appUIContent = `## 📊 Analytics: ${interaction.guild.name} (${days} Dias)\n*Módulo de Inteligência de Comunidades KodaAI*\n\n**Estatísticas do Período:**\n\`💬 ${totalMsgs} Mensagens\` ➖ \`📥 ${totalJoins} Entradas\` ➖ \`📤 ${totalLeaves} Saídas\`\n\n**🧠 Consultoria da IA:**\n> ${insight}`;
+          const appUIContent = `## 📊 Analytics: ${interaction.guild.name} (${days} Dias)\n**Estatísticas:** \`💬 ${totalMsgs} Msgs\` ➖ \`📥 ${totalJoins} Entradas\` ➖ \`📤 ${totalLeaves} Saídas\`\n\n**🧠 IA:**\n> ${insight}`;
 
-          // Menu de Seleção de Dias
           const selectRow = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId('select_period')
-              .setPlaceholder('📅 Alterar Período de Análise')
-              .addOptions(
-                { label: 'Últimos 7 Dias', description: 'Visão semanal padrão', value: '7', emoji: '📆' },
-                { label: 'Últimos 15 Dias', description: 'Visão quinzenal', value: '15', emoji: '📅' },
-                { label: 'Últimos 30 Dias', description: 'Visão mensal completa', value: '30', emoji: '📊' }
+            new StringSelectMenuBuilder().setCustomId('select_period').setPlaceholder('📅 Alterar Período de Análise').addOptions(
+                { label: 'Últimos 7 Dias', value: '7', emoji: '📆' },
+                { label: 'Últimos 15 Dias', value: '15', emoji: '📅' },
+                { label: 'Últimos 30 Dias', value: '30', emoji: '📊' }
               )
           );
 
           const btnRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('refresh_analytics').setLabel('Atualizar Dados').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
             new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Início').setStyle(ButtonStyle.Secondary).setEmoji('🔙')
           );
 
           await interaction.editReply({ content: appUIContent, files: [chartAttachment], embeds: [], components: [selectRow, btnRow] });
         }
 
-        // ❓ NAVEGAÇÃO: Menu de Ajuda
         if (customId === 'menu_help') {
           await interaction.deferUpdate();
-          const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n*   **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n*   **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n*   **Anti-Raid:** Analiso a idade e a reputação global de quem entra no servidor.\n*   **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão e evasões (leetspeak como "cuz4o").\n\n### 🛠️ Comandos Disponíveis\n*   \`/painel\` - Abre a interface nativa (Analytics e VIP).\n*   \`/setup\` - (Staff) Cria a base de operações segura e canais de log blindados.\n*   \`/dev\` - (Owner) Gerencia as licenças VIP e métricas brutas do bot.\n\n*A KodaAI opera silenciosamente. Se alguém violar as regras, a punição é imediata.*`;
+          const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n*   **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n*   **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n*   **Anti-Raid:** Analiso a idade e a reputação global de quem entra.\n*   **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão.\n\n### 🛠️ Comandos Disponíveis\n*   \`/painel\` - Abre a interface nativa.\n*   \`/setup\` - Cria a base de operações segura.\n*   \`/dev\` - Gerencia as licenças VIP e métricas.\n\n*A KodaAI opera silenciosamente.*`;
           
           const btnRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Menu Principal').setStyle(ButtonStyle.Primary).setEmoji('🏠')
@@ -145,45 +145,29 @@ export default {
           await interaction.editReply({ content: helpContent, files: [], embeds: [], components: [btnRow] });
         }
 
-        // 💎 BOTÃO VIP
         if (customId === 'vip_dashboard') {
           const vipEmbed = new EmbedBuilder()
             .setTitle('💎 Módulo VIP - KodaAI')
-            .setDescription('Acesso restrito. O plano VIP libera **OCR (Leitura de Imagens e Prints)**, bloqueio avançado de **NSFW/Gore** e o sistema implacável de **Timeout e Kick Automático**.\n\n*Contate o desenvolvedor para adquirir uma licença para o seu servidor.*')
+            .setDescription('Acesso restrito. O plano VIP libera **OCR (Leitura de Imagens e Prints)**, bloqueio avançado de **NSFW/Gore** e o sistema implacável de **Timeout e Kick Automático**.\n\n*Contate o desenvolvedor para adquirir.*')
             .setColor('#FEE75C');
 
           await interaction.reply({ embeds: [vipEmbed], ephemeral: true });
         }
 
-        // 🚨 BOTÃO DE TESTE DE ALARME (Preservando a lógica do comando /setup)
         if (customId === 'test_security_log') {
-          await interaction.reply({ content: 'Disparando alarme de teste no canal de logs...', ephemeral: true });
-
+          await interaction.reply({ content: 'Disparando alarme de teste...', ephemeral: true });
           const embedFake = new EmbedBuilder()
-            .setTitle('🚨 [TESTE] Ameaça Neutralizada')
-            .setColor('#ED4245')
-            .addFields(
-              { name: '👤 Usuário', value: `${interaction.user.tag} (Simulação)`, inline: true },
-              { name: '📍 Canal', value: `<#${interaction.channelId}>`, inline: true },
-              { name: '🛑 Tipo de Ameaça', value: `\`PHISHING_SIMULADO\``, inline: true },
-              { name: '💬 Mensagem Original', value: `\`\`\`text\nhttp://steam-nitro-free-golpe.com\n\`\`\``, inline: false },
-              { name: '🤖 Análise KodaAI', value: 'Isso é apenas um teste disparado pelo painel de Setup. O sistema está operante.', inline: false }
-            )
-            .setFooter({ text: 'Sistema Operante | Motor Híbrido Ativo' })
-            .setTimestamp();
+            .setTitle('🚨 [TESTE] Ameaça Neutralizada').setColor('#ED4245')
+            .addFields({ name: 'Tipo', value: 'PHISHING_SIMULADO' }, { name: 'Análise KodaAI', value: 'Teste disparado. Operante.' }).setTimestamp();
 
           const dbGuild = await prisma.guild.findUnique({ where: { id: interaction.guildId } });
           if (dbGuild && dbGuild.logChannelId) {
             const logChannel = interaction.guild.channels.cache.get(dbGuild.logChannelId) || await interaction.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
-            if (logChannel) {
-              await logChannel.send({ embeds: [embedFake] });
-            }
+            if (logChannel) await logChannel.send({ embeds: [embedFake] });
           }
         }
 
-      } catch (error) {
-        console.error('Erro ao processar interação:', error);
-      }
+      } catch (error) { console.error('Erro de interação:', error); }
     }
   }
 };

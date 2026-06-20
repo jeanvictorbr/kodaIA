@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,16 +9,32 @@ datasource db {
 }
 
 model Guild {
-  id              String   @id 
-  vip             Boolean  @default(false) 
-  logChannelId    String?  
-  securityLevel   Int      @default(1) 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  logs            SecurityLog[]
-  analytics    DailyAnalytics[]
+  id              String           @id
+  logChannelId    String?
+  vip             Boolean          @default(false)
+  respondMentions Boolean          @default(false) // 🟢 NOVO: Flag para ativar/desativar IA no chat
+  analytics       DailyAnalytics[] 
 }
 
+model GlobalReputation {
+  userId      String   @id
+  trustScore  Int      @default(100)
+  flags       Int      @default(0)
+  lastOffense DateTime @default(now())
+}
+
+model DailyAnalytics {
+  id        String   @id @default(uuid())
+  guildId   String
+  date      DateTime
+  messages  Int      @default(0)
+  joins     Int      @default(0)
+  leaves    Int      @default(0)
+  
+  guild     Guild    @relation(fields: [guildId], references: [id])
+
+  @@unique([guildId, date])
+}
 model SecurityLog {
   id        String   @id @default(uuid())
   guildId   String
@@ -31,22 +48,3 @@ model SecurityLog {
   @@index([userId])
 }
 
-model GlobalReputation {
-  userId      String   @id 
-  trustScore  Int      @default(100) 
-  flags       Int      @default(0)   
-  lastOffense DateTime?
-  updatedAt   DateTime @updatedAt
-}
-// 📊 NOVA TABELA: Rastreador Diário de Engajamento
-model DailyAnalytics {
-  id        String   @id @default(uuid())
-  guildId   String
-  date      DateTime
-  messages  Int      @default(0)
-  joins     Int      @default(0)
-  leaves    Int      @default(0)
-  guild     Guild    @relation(fields: [guildId], references: [id])
-
-  @@unique([guildId, date])
-}

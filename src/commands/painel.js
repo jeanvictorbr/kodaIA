@@ -7,25 +7,40 @@ export default {
     .setDescription('⚙️ Abre a Central de Controle e Analytics da KodaAI'),
     
   async execute(interaction) {
-    // 🔒 Torna o painel EPHEMERAL (Invisível para os outros membros)
     await interaction.deferReply({ ephemeral: true });
 
     const embed = new EmbedBuilder()
       .setTitle('⚙️ Central de Controle KodaAI')
-      .setDescription('Bem-vindo ao painel de controle nativo. Escolha o módulo que deseja acessar abaixo:')
+      .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
       .setColor('#2b2d31')
       .addFields(
-        { name: '📊 Analytics (FREE)', value: 'Acesse o gráfico de engajamento, métricas de retenção e consultoria da nossa Inteligência Artificial.' },
-        { name: '❓ Ajuda e Comandos', value: 'Descubra como a KodaAI protege seu servidor, os radares ativos e como utilizar os comandos.' },
-        { name: '💎 Módulo VIP', value: 'Gerencie OCR, limites e punições automáticas (Timeouts e Kicks).' }
+        { 
+          name: '📊 Dashboard de Analytics', 
+          value: "```yaml\nVisualize o tráfego de mensagens, retenção de membros e obtenha consultoria gerada por IA.\n
+```" 
+        },
+        { 
+          name: '💬 Resposta a Menções', 
+          value: "```yaml\nAtive para que a KodaAI responda no chat quando for mencionada (Consome mais tokens).\n```" 
+        },
+        { 
+          name: '❓ Central de Ajuda', 
+          value: "```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n
+```" 
+        },
+        { 
+          name: '💎 Gestão VIP', 
+          value: "```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n```" 
+        }
       );
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Primary).setEmoji('📊'),
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('menu_analytics').setLabel('Analytics').setStyle(ButtonStyle.Secondary).setEmoji('📊'),
+      new ButtonBuilder().setCustomId('toggle_mention').setLabel('IA Respostas').setStyle(ButtonStyle.Secondary).setEmoji('💬'),
       new ButtonBuilder().setCustomId('menu_help').setLabel('Ajuda').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
       new ButtonBuilder().setCustomId('vip_dashboard').setLabel('Upgrade VIP').setStyle(ButtonStyle.Success).setEmoji('💎')
     );
 
-    await interaction.editReply({ embeds: [embed], components: [row] });
+    await interaction.editReply({ embeds: [embed], components: [row1] });
   }
 };
