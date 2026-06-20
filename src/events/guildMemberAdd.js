@@ -16,57 +16,50 @@ export default {
 
       if (!dbGuild || !dbGuild.logChannelId) return;
 
+      // 📊 ANOTA A ENTRADA (JOINS)
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      await prisma.dailyAnalytics.upsert({
+        where: { guildId_date: { guildId: member.guild.id, date: today } },
+        update: { joins: { increment: 1 } },
+        create: { guildId: member.guild.id, date: today, joins: 1 }
+      }).catch(()=>{});
+
+      // Lógica de Segurança original Anti-Raid...
       const accountAgeMs = Date.now() - member.user.createdTimestamp;
       const accountAgeDays = Math.floor(accountAgeMs / (1000 * 60 * 60 * 24));
-      
       let riskLevel = 'LOW';
       let reason = [];
 
-      if (accountAgeDays < 3) {
-        riskLevel = 'HIGH';
-        reason.push('Conta criada há menos de 3 dias.');
-      }
-
+      if (accountAgeDays < 3) { riskLevel = 'HIGH'; reason.push('Conta criada há menos de 3 dias.'); }
       if (userReputation && userReputation.trustScore < 50) {
-        riskLevel = 'CRITICAL';
-        reason.push(`Ficha Suja Global: Reputação baixa (${userReputation.trustScore}/100) por enviar scams em outros servidores.`);
+        riskLevel = 'CRITICAL'; reason.push(`Ficha Suja Global: Reputação (${userReputation.trustScore}/100).`);
       }
 
       if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
-        // 🟢 CORREÇÃO: Força o bot a procurar o canal com fetch
         const logChannel = member.guild.channels.cache.get(dbGuild.logChannelId) || await member.guild.channels.fetch(dbGuild.logChannelId).catch(() => null);
-        let actionTaken = 'Nenhuma ação automática (Servidor FREE ou Risco apenas Alto).';
+        let actionTaken = 'Nenhuma ação automática.';
 
         if (dbGuild.vip && riskLevel === 'CRITICAL') {
           try {
-            await member.kick('KodaAI VIP: Risco Crítico de Raid detectado na entrada.');
-            actionTaken = '🥾 **KICK APLICADO AUTOMATICAMENTE** (Modo VIP Anti-Raid)';
-          } catch (e) {
-            actionTaken = 'Falha ao aplicar Kick automático (Falta de permissão do Bot ou hierarquia de cargos).';
-          }
+            await member.kick('KodaAI VIP: Risco Crítico de Raid.');
+            actionTaken = '🥾 **KICK AUTOMÁTICO**';
+          } catch (e) { actionTaken = 'Falha ao kickar.'; }
         }
         
         if (logChannel) {
           const alertEmbed = new EmbedBuilder()
-            .setTitle('🛡️ Alerta de Segurança Anti-Raid')
-            .setColor(riskLevel === 'CRITICAL' ? '#992D22' : '#E67E22')
+            .setTitle('🛡️ Alerta Anti-Raid').setColor(riskLevel === 'CRITICAL' ? '#992D22' : '#E67E22')
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-            .setDescription(`Um usuário de alto risco acabou de entrar no servidor. Fiquem de olho.`)
             .addFields(
-              { name: '👤 Usuário', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
-              { name: '📅 Idade da Conta', value: `${accountAgeDays} dia(s)`, inline: true },
-              { name: '⚠️ Motivo do Alerta', value: reason.join('\n'), inline: false },
-              { name: '🤖 Ação da KodaAI', value: actionTaken, inline: false }
-            )
-            .setFooter({ text: 'KodaAI - Monitoramento de Entrada' })
-            .setTimestamp();
-
+              { name: '👤 Usuário', value: `${member.user.tag}`, inline: true },
+              { name: '📅 Idade', value: `${accountAgeDays} dias`, inline: true },
+              { name: '⚠️ Motivo', value: reason.join('\n'), inline: false },
+              { name: '🤖 Ação', value: actionTaken, inline: false }
+            ).setTimestamp();
           await logChannel.send({ embeds: [alertEmbed] });
         }
       }
-
-    } catch (error) {
-      console.error('🚨 [guildMemberAdd] Erro no módulo Anti-Raid:', error);
-    }
+    } catch (error) { console.error('🚨 Erro Anti-Raid:', error); }
   }
 };

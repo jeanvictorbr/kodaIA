@@ -37,3 +37,15 @@ model GlobalReputation {
   lastOffense DateTime?
   updatedAt   DateTime @updatedAt
 }
+// 📊 NOVA TABELA: Rastreador Diário de Engajamento
+model DailyAnalytics {
+  id        String   @id @default(uuid())
+  guildId   String
+  date      DateTime
+  messages  Int      @default(0)
+  joins     Int      @default(0)
+  leaves    Int      @default(0)
+  guild     Guild    @relation(fields: [guildId], references: [id])
+
+  @@unique([guildId, date])
+}
