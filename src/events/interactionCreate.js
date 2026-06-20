@@ -34,11 +34,10 @@ export default {
             .setDescription('Navegue pelo painel de controlo selecionando uma das opções abaixo:')
             .setColor('#2b2d31')
             .addFields(
-              { name: '📊 Dashboard de Analytics', value: '```yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n```' },
-              { name: '💬 Resposta a Menções', value: '```yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n```' },
-              { name: '❓ Central de Ajuda', value: '```yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n```' },
-              { name: '💎 Gestão VIP', value: '```yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n
-```' }
+              { name: '📊 Dashboard de Analytics', value: `\`\`\`yaml\nVisualize o tráfego de mensagens, retenção e obtenha consultoria gerada por IA.\n\`\`\`` },
+              { name: '💬 Resposta a Menções', value: `\`\`\`yaml\nAtive para que a KodaAI responda no chat quando for mencionada.\n\`\`\`` },
+              { name: '❓ Central de Ajuda', value: `\`\`\`yaml\nDescubra como os radares de texto e visão protegem o seu servidor.\n\`\`\`` },
+              { name: '💎 Gestão VIP', value: `\`\`\`yaml\nGerencie funcionalidades Premium como OCR avançado e Moderação Automática.\n\`\`\`` }
             );
 
           const row1 = new ActionRowBuilder().addComponents(
@@ -147,7 +146,7 @@ export default {
         // ==========================================
         if (customId === 'menu_help') {
           await interaction.deferUpdate();
-          const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n*   **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n*   **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n*   **Anti-Raid:** Analiso a idade e a reputação global de quem entra.\n*   **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão.\n\n### 🛠️ Comandos Disponíveis\n*   \`/painel\` - Abre a interface nativa.\n*   \`/setup\` - Cria a base de operações segura.\n*   \`/dev\` - Gerencia as licenças VIP e métricas.\n\n*A KodaAI opera silenciosamente.*`;
+          const helpContent = `## ❓ Central de Ajuda - KodaAI\nO sistema anti-raid e anti-scam mais letal e inteligente do Discord.\n\n### 🛡️ O que eu faço?\n* **Radar de Texto:** Intercepto links de phishing, nitro falso e golpes financeiros.\n* **Radar Visual (VIP):** Faço OCR (Leitura) em imagens para bloquear prints de PIX falsos, pornografia e gore.\n* **Anti-Raid:** Analiso a idade e a reputação global de quem entra.\n* **Anti-Toxicidade:** Puno instantaneamente palavras de baixo calão.\n\n### 🛠️ Comandos Disponíveis\n* \`/painel\` - Abre a interface nativa.\n* \`/setup\` - Cria a base de operações segura.\n* \`/dev\` - Gerencia as licenças VIP e métricas.\n\n*A KodaAI opera silenciosamente.*`;
           
           const btnRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('menu_hub').setLabel('Voltar ao Menu Principal').setStyle(ButtonStyle.Primary).setEmoji('🏠')
