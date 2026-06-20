@@ -15,6 +15,7 @@ model Guild {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   logs            SecurityLog[]
+  analytics    DailyAnalytics[]
 }
 
 model SecurityLog {
