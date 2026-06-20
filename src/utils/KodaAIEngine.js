@@ -37,15 +37,31 @@ class KodaAIEngine {
     });
   }
 
-  // 🧠 NOVO: Geras a dica de engajamento baseada nos dados do Painel
+  // 🧠 ATUALIZADO: Com Failover para o Llama em caso de Erro 429 (Limite de Cota)
   async getConsultingInsight(prompt) {
     try {
       const model = this._getUncensoredModel();
       const response = await model.generateContent(prompt);
       return response.response.text();
     } catch (error) {
-      console.error("Erro na consultoria IA:", error);
-      return "Métricas computadas. A IA não pôde formular a consultoria neste momento devido ao elevado fluxo.";
+      console.warn("⚠️ [KodaAI] Gemini esgotou a cota na consultoria. Acionando Failover pro Llama...");
+      try {
+        const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7 
+        }, {
+          headers: {
+            'Authorization': `Bearer ${process.env.LLAMA_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        });
+        return response.data.choices[0].message.content;
+      } catch (fallbackError) {
+        console.error("🚨 Llama também falhou na consultoria:", fallbackError.message);
+        return "Métricas computadas. A consultoria IA está momentaneamente indisponível devido ao alto tráfego nas redes neurais.";
+      }
     }
   }
 
