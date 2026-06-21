@@ -1,73 +1,96 @@
 // src/index.js
-import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-// Truque de Mestre pra ES Modules lidarem com caminhos de pastas
+// 🛡️ SISTEMA ANTI-CRASH (Evita que o bot desligue por erros inesperados)
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 [Anti-Crash] Rejeição não tratada:', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('🚨 [Anti-Crash] Exceção não capturada:', error);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Inicialização do Client com os Intents necessários
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-  ],
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildMembers,   
+    ],
 });
 
-client.commands = new Collection(); // Nosso cache O(1) de comandos na RAM
+client.commands = new Collection();
+const commandsArray = [];
 
 // ==========================================
-// 🚀 HANDLER DE COMANDOS (Dinâmico)
+// 1. CARREGAR COMANDOS (Slash Commands)
 // ==========================================
 const commandsPath = path.join(__dirname, 'commands');
-// Cria a pasta se não existir pra não dar crash
-if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath, { recursive: true });
-
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-  const filePath = path.join(commandsPath, file);
-  // Importação dinâmica usando URL (obrigatório em ES Modules)
-  const { default: command } = await import(pathToFileURL(filePath).href);
-  
-  if ('data' in command && 'execute' in command) {
-    client.commands.set(command.data.name, command);
-    console.log(`✅ [Handler] Comando /${command.data.name} carregado.`);
-  } else {
-    console.log(`⚠️ [Handler] Aviso: O comando em ${file} tá sem "data" ou "execute".`);
-  }
+    const filePath = path.join(commandsPath, file);
+    const command = (await import(`file://${filePath}`)).default;
+    if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+        commandsArray.push(command.data.toJSON());
+    }
 }
 
 // ==========================================
-// 📡 HANDLER DE EVENTOS (Dinâmico)
+// 2. CARREGAR EVENTOS
 // ==========================================
 const eventsPath = path.join(__dirname, 'events');
-if (!fs.existsSync(eventsPath)) fs.mkdirSync(eventsPath, { recursive: true });
-
 const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
 for (const file of eventFiles) {
-  const filePath = path.join(eventsPath, file);
-  const { default: event } = await import(pathToFileURL(filePath).href);
-  
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args, client));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args, client));
-  }
-  console.log(`📡 [Handler] Evento ${event.name} na escuta.`);
+    const filePath = path.join(eventsPath, file);
+    const event = (await import(`file://${filePath}`)).default;
+    if (event.once) {
+        client.once(event.name, (...args) => event.execute(...args, client));
+    } else {
+        client.on(event.name, (...args) => event.execute(...args, client));
+    }
 }
 
 // ==========================================
-// 🔥 LIGANDO OS MOTORES
+// 3. REGISTRAR COMANDOS (SISTEMA INTELIGENTE)
 // ==========================================
-client.login(process.env.DISCORD_TOKEN)
-  .then(() => console.log(`\n🔥 [KodaAI] Tá online, pai! Logado no Discord.\n`))
-  .catch(err => console.error('❌ [KodaAI] Erro fatal no login:', err));
+client.once('ready', async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    
+    try {
+        // Se a variável GUILD_ID existir e não estiver vazia -> Registra Localmente (Instantâneo)
+        if (process.env.GUILD_ID) {
+            console.log(`🔄 [API] GUILD_ID detectado. Registrando ${commandsArray.length} comandos LOCALMENTE no servidor...`);
+            await rest.put(
+                Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), 
+                { body: commandsArray },
+            );
+            console.log('✅ [API] Comandos (/) sincronizados LOCALMENTE com sucesso!');
+        } 
+        // Se a variável GUILD_ID não existir -> Registra Globalmente (Leva até 1h no Discord)
+        else {
+            console.log(`🔄 [API] Nenhum GUILD_ID configurado. Registrando ${commandsArray.length} comandos GLOBALMENTE...`);
+            await rest.put(
+                Routes.applicationCommands(process.env.CLIENT_ID), 
+                { body: commandsArray },
+            );
+            console.log('✅ [API] Comandos (/) sincronizados GLOBALMENTE com sucesso!');
+        }
+    } catch (error) {
+        console.error('🚨 [API] Erro ao sincronizar comandos:', error);
+    }
+});
+
+// Ligar o bot
+client.login(process.env.DISCORD_TOKEN);
